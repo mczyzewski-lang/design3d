@@ -8,6 +8,7 @@ import type { EntryDir, SideMode, WallKey } from '../engine/types';
 import { useConfig, useSolved, useStore } from '../store/store';
 import { woodSwatch } from '../three/woodCanvas';
 import { AnalysisCard } from './AnalysisCard';
+import { CommentsCard } from '../studio/StudioUI';
 import { Field, Section, Segmented, SliderField, Thumb, Toggle } from './controls';
 import { RailingThumb, ShapeThumb, StructureThumb } from './thumbs';
 import { downloadJson, exportPayload } from './fileOps';
@@ -27,6 +28,7 @@ export function Panel() {
   return (
     <aside className="flex h-full flex-col overflow-y-auto scrollbar-thin bg-panel" data-testid="panel">
       <AnalysisCard />
+      <CommentsCard />
       <Section index={1} title="Typ schodów" open={open === 1} onToggle={() => t(1)}><TypeSection /></Section>
       <Section index={2} title="Wymiary przestrzeni" open={open === 2} onToggle={() => t(2)}><DimensionsSection /></Section>
       <Section index={3} title="Konstrukcja stalowa" open={open === 3} onToggle={() => t(3)}><StructureSection /></Section>

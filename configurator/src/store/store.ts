@@ -21,6 +21,8 @@ export interface ViewState {
   eyeFrom: 'entry' | 'top';
   fitNonce: number;
   resetNonce: number;
+  /** delikatny obrót kamery (tło bramki udostępnionego linku) */
+  spin: boolean;
 }
 
 const STORAGE_KEY = 'stair-studio:v1';
@@ -98,6 +100,7 @@ const VIEW: ViewState = {
   eyeFrom: 'entry',
   fitNonce: 0,
   resetNonce: 0,
+  spin: false,
 };
 
 export const useStore = create<Store>((set, get) => ({

@@ -10,7 +10,7 @@ export class LabelLayer {
   private items = new Map<string, Item>();
   private v = new THREE.Vector3();
   constructor(readonly root: HTMLDivElement) {}
-  set(owner: string, id: string, text: string, pos: { x: number; y: number; z: number }, cls: string): void {
+  set(owner: string, id: string, text: string, pos: { x: number; y: number; z: number }, cls: string, onClick?: () => void): void {
     const key = `${owner}:${id}`;
     let it = this.items.get(key);
     if (!it) {
@@ -26,6 +26,9 @@ export class LabelLayer {
     }
     if (it.node.textContent !== text) it.node.textContent = text;
     if (it.node.className !== cls) it.node.className = cls;
+    it.node.onclick = onClick ? (e) => { e.stopPropagation(); onClick(); } : null;
+    it.node.style.pointerEvents = onClick ? 'auto' : 'none';
+    it.node.style.cursor = onClick ? 'pointer' : '';
     it.pos.set(pos.x, pos.y, pos.z);
   }
   /** Usuwa etykiety właściciela, których nie ma w `keep`. */
@@ -66,7 +69,7 @@ export function LabelUpdater() {
   return null;
 }
 
-export interface LabelSpec { id: string; text: string; pos: { x: number; y: number; z: number }; cls: string }
+export interface LabelSpec { id: string; text: string; pos: { x: number; y: number; z: number }; cls: string; onClick?: () => void }
 
 /** Synchronizuje zestaw etykiet danego właściciela z warstwą DOM. */
 export function useLabels(owner: string, labels: LabelSpec[]) {
@@ -75,7 +78,7 @@ export function useLabels(owner: string, labels: LabelSpec[]) {
     if (!layer) return;
     const keep = new Set<string>();
     for (const l of labels) {
-      layer.set(owner, l.id, l.text, l.pos, l.cls);
+      layer.set(owner, l.id, l.text, l.pos, l.cls, l.onClick);
       keep.add(l.id);
     }
     layer.prune(owner, keep);

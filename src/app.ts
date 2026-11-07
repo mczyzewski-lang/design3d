@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.ts';
 import { apiRouter } from './api/routes.ts';
+import { studioRouter } from './studio/routes.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CONFIGURATOR_DIST = path.join(here, '..', 'configurator', 'dist');
@@ -37,6 +38,7 @@ function adminAuth(req: express.Request, res: express.Response, next: express.Ne
 export function createApp(): express.Express {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1); // Railway / reverse proxy: poprawne req.secure i req.ip
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -54,6 +56,7 @@ export function createApp(): express.Express {
     if (fs.existsSync(index)) res.sendFile(index);
     else res.status(503).send('Konfigurator nie jest zbudowany — uruchom „npm run build”.');
   });
+  app.use('/api/studio', studioRouter());
   app.use('/admin', adminAuth, express.static(path.join(here, '..', 'public', 'admin'), { index: 'index.html' }));
   app.use('/api/admin/lead-discovery', adminAuth, apiRouter());
   return app;

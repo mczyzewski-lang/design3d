@@ -43,7 +43,20 @@ export function spiralParams(s: StairConfig, N: number, rise: number, t: number)
   const nT = Math.max(1, N - 1);
   const raw = (nT * s.going) / rw;
   const q = Math.PI / 2;
-  const sweep = Math.max(2 * q, Math.round(raw / q) * q);
+  // podest leży w ćwiartce [sweep, sweep+90°] — pod nim są stopnie z obrotu niżej (kąty sweep−360°…sweep−270°).
+  // Spośród sąsiednich wielokrotności 90° wybierz najbliższą tej z kroku, przy której prześwit pod podestem ≥ 205 cm.
+  const H = N * rise;
+  const underPlatform = (sw: number) => {
+    const th = sw / nT;
+    const maxAngle = sw - 3 * q; // najwyższy stopień pod podestem
+    return maxAngle <= 0 ? Infinity : H - LIMITS.platformThickness - Math.min(nT, Math.ceil(maxAngle / th)) * rise;
+  };
+  const base = Math.round(raw / q);
+  const cands = [base, base - 1, base + 1, base - 2, base + 2].map((k) => Math.max(2, k) * q);
+  const sweep = cands.reduce((best, sw) => {
+    const score = (x: number) => Math.abs(x - raw) + (underPlatform(x) < LIMITS.headroom ? 100 : 0);
+    return score(sw) < score(best) ? sw : best;
+  }, cands[0]);
   const theta = sweep / nT;
   const risersPerTurn = (2 * Math.PI) / theta;
   return { radius: R, columnRadius: rc, walkRadius: rw, theta, sweep, risersPerTurn, treadWidth: R - rc, selfHeadroom: risersPerTurn * rise - t };

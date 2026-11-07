@@ -56,6 +56,10 @@ describe('schody kręcone', () => {
     expect(o.maxX - o.minX).toBeGreaterThanOrEqual(1.8);
     expect(s.fit.fits).toBe(true);
   });
+  test('obrót dobierany tak, by podest nie wisiał nisko nad pierwszym obrotem (Ø160)', () => {
+    const s = solve(spiral((c) => { c.stairs.spiralDiameter = 1.6; c.stairs.going = 0.24; }));
+    expect(s.opening.headroomShortfalls).toEqual([]);
+  });
   test('za mało stopni na obrót → błąd prześwitu nad samą sobą', () => {
     const bad = solve(spiral((c) => { c.stairs.spiralDiameter = 1.4; c.stairs.going = 0.3; }));
     expect(bad.layout.spiral!.selfHeadroom).toBeLessThan(2.0);

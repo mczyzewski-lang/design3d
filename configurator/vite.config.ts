@@ -7,6 +7,8 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   base: '/konfigurator/',
   plugins: [react(), tailwindcss()],
+  // tryb dev: API Stair Studio z serwera Express (npm start w katalogu głównym)
+  server: { proxy: { '/api': 'http://localhost:3000' } },
   build: {
     outDir: 'dist',
     chunkSizeWarningLimit: 1600,

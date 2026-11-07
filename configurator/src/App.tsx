@@ -4,6 +4,8 @@ import { TopBar, InfoBar, BottomBar } from './ui/Bars';
 import { Panel } from './ui/Panel';
 import { useStore, useView } from './store/store';
 import { configFromHash } from './engine/share';
+import { CommentComposer, ShareGate } from './studio/StudioUI';
+import { useStudio } from './studio/studioStore';
 
 // three.js / R3F w osobnym chunku
 const Scene = lazy(() => import('./three/Scene'));
@@ -28,6 +30,8 @@ function ProjectionFade() {
 }
 
 export default function App() {
+  const gate = useStudio((s) => !!s.gate);
+  useEffect(() => { void useStudio.getState().init(); }, []);
   // wklejony link z konfiguracją przy otwartej aplikacji
   useEffect(() => {
     const h = () => { const c = configFromHash(location.hash); if (c) useStore.getState().load(c); };
@@ -35,7 +39,8 @@ export default function App() {
     return () => window.removeEventListener('hashchange', h);
   }, []);
   return (
-    <div className="flex h-full flex-col">
+    <>
+    <div className={`flex h-full flex-col ${gate ? 'pointer-events-none select-none blur-[9px] saturate-[0.85] transition-[filter] duration-700' : ''}`} aria-hidden={gate}>
       <TopBar />
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <main className="relative h-[62vh] min-h-[360px] flex-1 md:h-auto">
@@ -44,12 +49,14 @@ export default function App() {
           </Suspense>
           <ProjectionFade />
           <div className="pointer-events-none absolute inset-x-3 top-3 flex justify-start"><InfoBar /></div>
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-center"><BottomBar /></div>
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col items-center gap-2"><CommentComposer /><BottomBar /></div>
         </main>
         <div className="w-full shrink-0 border-t border-line md:h-full md:w-[24%] md:min-w-[340px] md:max-w-[420px] md:border-l md:border-t-0">
           <Panel />
         </div>
       </div>
     </div>
+    <ShareGate />
+    </>
   );
 }

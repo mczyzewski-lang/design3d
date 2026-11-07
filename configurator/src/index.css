@@ -53,3 +53,16 @@ input[type='range'] { accent-color: var(--color-oak); }
 }
 
 .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d8d2c8 transparent; }
+
+.pin-label {
+  font: 700 11px/1 var(--font-sans);
+  min-width: 20px; height: 20px; padding: 0 6px;
+  display: grid; place-items: center;
+  border-radius: 999px; color: #fff; background: #8a5a2b;
+  border: 2px solid #fff; box-shadow: 0 3px 10px rgba(0,0,0,.25);
+  transition: transform .15s;
+}
+.pin-label:hover, .pin-active { scale: 1.18; }
+.pin-contractor { background: #2f6fd6; }
+.pin-resolved { background: #a8a29a; }
+.pin-pending { background: #e5484d; }

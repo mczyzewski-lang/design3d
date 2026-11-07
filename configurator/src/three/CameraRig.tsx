@@ -1,6 +1,7 @@
 // 5 trybów kamery: perspektywa, z góry (ortho), z boku (ortho), przekrój, poziom oczu. Płynne przejścia CameraControls.
 import { useEffect, useMemo, useRef } from 'react';
 import { CameraControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import CameraControlsImpl from 'camera-controls';
 import * as THREE from 'three';
 import type { Config, Solved } from '../engine/types';
@@ -83,6 +84,11 @@ export function CameraRig({ config, solved, view }: { config: Config; solved: So
     return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.camera, view.eyeFrom, view.sideFlip, view.resetNonce, ortho]);
+
+  // delikatny obrót w tle (bramka udostępnionego linku)
+  useFrame((_, dt) => {
+    if (view.spin && ref.current && !ortho) ref.current.azimuthAngle += dt * 0.12;
+  });
 
   // dopasuj schody do widoku
   useEffect(() => {

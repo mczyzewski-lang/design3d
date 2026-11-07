@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, animate } from 'motion/react';
-import { Link, Plus, Printer, Share2, BrickWall, Camera, Check, ChevronDown, Cuboid, Eye, Focus, ImageDown, Layers, Lightbulb, Moon, Rotate3d, RotateCcw, Ruler, Scissors, SquareDashed, Sun, ArrowLeftRight, PanelTop, Save, FolderOpen, FileDown, FileUp, Footprints } from 'lucide-react';
+import { Link, MessageCirclePlus, Plus, Printer, BrickWall, Check, ChevronDown, Cuboid, Eye, Focus, ImageDown, Layers, Lightbulb, Moon, Rotate3d, RotateCcw, Ruler, Scissors, SquareDashed, Sun, ArrowLeftRight, PanelTop, FileDown, FileUp, Footprints } from 'lucide-react';
 import { COLLECTIONS } from '../engine/presets';
 import { WALL_LABEL } from '../engine/catalog';
 import type { WallKey } from '../engine/types';
@@ -9,6 +9,8 @@ import { capture, downloadDataUrl } from '../three/capture';
 import { StatusPill } from './AnalysisCard';
 import { downloadJson, exportPayload, pickJsonFile } from './fileOps';
 import { openPrintView } from './print';
+import { ProjectActions } from '../studio/StudioUI';
+import { useStudio } from '../studio/studioStore';
 import { shareUrl } from '../engine/share';
 
 function useToast() {
@@ -53,18 +55,12 @@ const MenuItem = ({ onClick, children, active }: { onClick: () => void; children
 export function TopBar() {
   const c = useConfig();
   const collection = useStore((s) => s.collection);
-  const saveLocal = useStore((s) => s.saveLocal);
-  const restoreLocal = useStore((s) => s.restoreLocal);
   const reset = useStore((s) => s.reset);
   const load = useStore((s) => s.load);
   const userCollections = useStore((s) => s.userCollections);
   const saveCollection = useStore((s) => s.saveCollection);
   const applyUserCollection = useStore((s) => s.applyUserCollection);
   const deleteCollection = useStore((s) => s.deleteCollection);
-  const projects = useStore((s) => s.projects);
-  const saveProject = useStore((s) => s.saveProject);
-  const loadProject = useStore((s) => s.loadProject);
-  const deleteProject = useStore((s) => s.deleteProject);
   const [toast, toastNode] = useToast();
   const share = async () => {
     const url = shareUrl(c, location.href);
@@ -114,36 +110,18 @@ export function TopBar() {
       <Menu label="Plik" testId="menu-file">
         {(close) => (
           <>
-            <MenuItem onClick={() => { toast(saveLocal() ? 'Zapisano w przeglądarce' : 'Nie udało się zapisać'); close(); }}><Save size={14} /> Zapisz w przeglądarce</MenuItem>
-            <MenuItem onClick={() => { toast(restoreLocal() ? 'Przywrócono zapisaną konfigurację' : 'Brak zapisanej konfiguracji'); close(); }}><FolderOpen size={14} /> Przywróć zapisaną</MenuItem>
             <MenuItem onClick={() => { downloadJson(exportPayload(c), 'stair-studio.json'); close(); }}><FileDown size={14} /> Eksport JSON</MenuItem>
             <MenuItem onClick={() => { pickJsonFile().then((d) => { load(d); toast('Zaimportowano konfigurację'); }).catch((e) => toast(e.message)); close(); }}><FileUp size={14} /> Import JSON</MenuItem>
             <MenuItem onClick={() => { png(); close(); }}><ImageDown size={14} /> Zrzut PNG</MenuItem>
-            <MenuItem onClick={() => { void share(); close(); }}><Link size={14} /> Kopiuj link do konfiguracji</MenuItem>
+            <MenuItem onClick={() => { void share(); close(); }}><Link size={14} /> Kopiuj szybki link (bez zapisu)</MenuItem>
             <MenuItem onClick={() => { printCard(); close(); }}><Printer size={14} /> Karta projektu (druk / PDF)</MenuItem>
-            <div className="my-1 border-t border-line" />
-            <MenuItem onClick={() => { const n = prompt('Nazwa projektu (np. klient, adres):'); if (n?.trim()) { saveProject(n.trim()); toast('Zapisano projekt'); } close(); }}><Plus size={14} /> Zapisz jako projekt…</MenuItem>
-            {projects.length > 0 && <div className="mx-2.5 mt-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">Moje projekty</div>}
-            {projects.slice(0, 12).map((p) => (
-              <div key={p.id} className="flex items-center">
-                <MenuItem onClick={() => { loadProject(p.id); toast(`Wczytano: ${p.name}`); close(); }}>
-                  <div><div className="font-medium">{p.name}</div><div className="text-[10.5px] text-muted">{new Date(p.savedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}</div></div>
-                </MenuItem>
-                <button type="button" title="Usuń projekt" onClick={() => deleteProject(p.id)} className="px-2 text-[13px] text-muted hover:text-bad">✕</button>
-              </div>
-            ))}
             <div className="my-1 border-t border-line" />
             <MenuItem onClick={() => { reset(); close(); toast('Przywrócono konfigurację domyślną'); }}><RotateCcw size={14} /> Reset</MenuItem>
           </>
         )}
       </Menu>
       <div className="flex-1" />
-      <button type="button" onClick={() => void share()} data-testid="share" title="Udostępnij link" className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12.5px] hover:border-oak">
-        <Share2 size={14} /> <span className="hidden sm:inline">Udostępnij</span>
-      </button>
-      <button type="button" onClick={png} data-testid="save-view" className="flex items-center gap-2 rounded-full bg-ink px-4 py-1.5 text-[12.5px] font-medium text-white hover:bg-ink/85">
-        <Camera size={14} /> <span className="hidden sm:inline">Zapisz widok</span>
-      </button>
+      <ProjectActions toast={toast} />
       {toastNode}
     </header>
   );
@@ -214,6 +192,7 @@ export function BottomBar() {
   const requestFit = useStore((s) => s.requestFit);
   const requestReset = useStore((s) => s.requestCameraReset);
   const [wallsOpen, setWallsOpen] = useState(false);
+  const commentMode = useStudio((s) => s.commentMode);
   const tool = (active: boolean) => `flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl transition ${active ? 'bg-ink text-white' : 'text-ink/70 hover:bg-black/5'}`;
   return (
     <div className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-2xl border border-line/80 bg-white/90 p-1.5 shadow-lg backdrop-blur" data-testid="bottom-bar">
@@ -248,6 +227,7 @@ export function BottomBar() {
           )}
         </AnimatePresence>
       </div>
+      <button type="button" title="Dodaj komentarz w 3D" data-testid="tool-comment" onClick={() => useStudio.getState().setCommentMode(!useStudio.getState().commentMode)} className={tool(commentMode)}><MessageCirclePlus size={15} /></button>
       <button type="button" title="Strop" onClick={() => setView({ showSlab: !view.showSlab })} className={tool(view.showSlab)}><Layers size={15} /></button>
       <button type="button" title={c.lighting.night ? 'Dzień' : 'Noc'} data-testid="tool-night" onClick={() => setLighting({ night: !c.lighting.night })} className={tool(c.lighting.night)}>{c.lighting.night ? <Moon size={15} /> : <Sun size={15} />}</button>
       <button type="button" title="LED" onClick={() => setLighting({ led: !c.lighting.led })} className={tool(c.lighting.led)}><Lightbulb size={15} /></button>

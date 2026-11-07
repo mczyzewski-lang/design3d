@@ -35,6 +35,8 @@ configurator/src/
   ui/          panel z analizą i 8 sekcjami, paski, miniatury SVG, eksport
 ```
 
+- **Projekty na serwerze i współpraca** (`src/studio/`, API `/api/studio`): „Zapisz” nadpisuje bieżącą wersję, „▾ → Zapisz jako nową wersję” tworzy kolejną (lista wersji, przełączanie). „Udostępnij ten projekt” — link `/konfigurator/p/<token>`, także e-mailem i SMS-em (mailto:/sms: z gotowym linkiem). Komentarze 3D przypinane kliknięciem w model (unosząca się kropka z numerem i nitką do punktu) oraz ogólne; właściciel oznacza je jako rozwiązane.
+- **Udostępniony link:** w tle rozmyty, delikatnie obracający się projekt i wybór „Jestem właścicielem projektu” / „Firma wykonawcza schodów”. Firma przechodzi błyskawiczną rejestrację (imię, nazwisko, e-mail, telefon, zgoda — zapisywana z treścią i datą) i klika „Zobacz i wyceń projekt schodów”; potem może komentować i zapisać własną kopię. Aktywna sesja (ciasteczko HttpOnly, 90 dni) pomija bramkę. Właściciel widzi w oknie udostępniania, które firmy otworzyły projekt (z kontaktem). Tożsamość właściciela bez kont: ciasteczko przeglądarki, a na inne urządzenie „Link właściciela” (ważny 7 dni).
 - **Dla firm i klientów:** link z całą konfiguracją (przycisk „Udostępnij”, `#c=…` w adresie), własne kolekcje stylu i zapisane projekty (localStorage), karta projektu do druku/PDF ze zrzutem i zestawieniem.
 - Kształty: proste (I), łamane 90° (L) i 180° (U) — ze spocznikiem **albo stopniami zabiegowymi** (L: 2–4, U: 4–7, wielokątne stopnice zbiegające się w narożu) — oraz **schody kręcone** (średnica 120–260 cm, kolumna centralna, stopnie klinowe na tulejach, obrót zaokrąglony do 90° z górnym podestem w ćwiartce otworu, kontrola prześwitu nad samą sobą i pod podestem).
 - Szkło: mocowanie punktowe / listwa dolna (profil U) / zaciski między słupkami; szkło bezbarwne, extra clear, satynowe, grafitowe, brązowe; górna krawędź: drewniany pochwyt na szkle (z drewna stopnic), nakładka stalowa lub bez pochwytu (z ostrzeżeniem). Podstopnice: drewno / biała / kolor stali.
@@ -55,7 +57,11 @@ npm run test:configurator
 node configurator/scripts/browser-check.mjs http://localhost:3000/konfigurator/ ./browser-check
 ```
 
-Testy Vitest (88) obejmują kryteria A–H ze specyfikacji, ciągłość L/U, prześwit przy ręcznym otworze, auto-dopasowanie (rozwiązanie / brak / inny kształt), konfigurację domyślną (20 × 17,5 cm, 10 + 10, spocznik 175 cm, Blondel 63, „Mieści się”) oraz test regresyjny (raycast), że stal nigdzie nie przebija stopnic, a także schody kręcone (ciągłość, styczność wejścia, podest, prześwit nad spiralą, auto-dopasowanie), stopnie zabiegowe L/U (ciągłość wysokości, wielokąty wypełniające zakręt), warianty szkła i link udostępniania.
+```bash
+node configurator/scripts/collab-check.mjs http://localhost:3000 ./collab-check
+```
+
+Testy Vitest (89) obejmują kryteria A–H ze specyfikacji, ciągłość L/U, prześwit przy ręcznym otworze, auto-dopasowanie (rozwiązanie / brak / inny kształt), konfigurację domyślną (20 × 17,5 cm, 10 + 10, spocznik 175 cm, Blondel 63, „Mieści się”) oraz test regresyjny (raycast), że stal nigdzie nie przebija stopnic, API współpracy testuje `test/studio.test.ts` (wersje, udostępnianie, bramka, rejestracja, komentarze, link właściciela), a `collab-check.mjs` przechodzi cały scenariusz właściciel ↔ firma w dwóch przeglądarkach. Dalej: schody kręcone (ciągłość, styczność wejścia, podest, prześwit nad spiralą, auto-dopasowanie), stopnie zabiegowe L/U (ciągłość wysokości, wielokąty wypełniające zakręt), warianty szkła i link udostępniania.
 
 **Railway.** `railway.json` ustawia `buildCommand: npm run build` (instaluje i buduje `configurator/`) i `startCommand: npm start`; healthcheck `/healthz`. Serwer nasłuchuje na `process.env.PORT`. Skrypt startowy ma flagi `--experimental-strip-types --experimental-sqlite`, więc działa na każdym Node ≥ 22.12 (`.node-version`: 22). Baza SQLite panelu Lead Discovery domyślnie leży w `./data` — na Railway warto podpiąć wolumen i ustawić `DATABASE_PATH` oraz `ADMIN_PASSWORD`.
 

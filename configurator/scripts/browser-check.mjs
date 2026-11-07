@@ -106,9 +106,6 @@ await page.click('[data-testid="glass-tint-frosted"]');
 await wait(600);
 await shot('66-szklo-satynowe');
 await page.click('[data-testid="glass-tint-extraClear"]');
-await page.click('[data-testid="share"]');
-await wait(400);
-console.log('link:', page.url().includes('#c=') ? 'w adresie' : 'BRAK');
 
 // wąski ekran
 await page.setViewportSize({ width: 420, height: 900 });
