@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-paper: #f7f5f1;
+  --color-panel: #fdfcfa;
+  --color-ink: #141311;
+  --color-muted: #77726a;
+  --color-line: #e6e1d9;
+  --color-oak: #8a5a2b;
+  --color-oak-soft: #f1e7dc;
+  --color-ok: #2f7a55;
+  --color-ok-soft: #e4f2ea;
+  --color-warn: #b7791f;
+  --color-warn-soft: #fbf0dc;
+  --color-bad: #c43c3c;
+  --color-bad-soft: #fbe6e5;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+input[type='range'] { accent-color: var(--color-oak); }
+
+.dim-label {
+  font: 600 11px/1 var(--font-sans);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(253, 252, 250, 0.92);
+  border: 1px solid rgba(20, 19, 17, 0.12);
+  color: #3d3a35;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.dim-stair { color: #8a5a2b; }
+.dim-gap { color: #2f7a55; }
+.dim-opening { color: #5b4bc4; }
+.conflict-label {
+  font: 600 12px/1.2 var(--font-sans);
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #c43c3c;
+  color: #fff;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(196, 60, 60, 0.35);
+}
+
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d8d2c8 transparent; }

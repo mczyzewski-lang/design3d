@@ -1,4 +1,64 @@
-# design3d.pl — panel administracyjny: Lead Discovery
+# design3d.pl
+
+Repozytorium zawiera dwie niezależne części serwowane przez jeden serwer Express:
+
+| Część | Trasa | Kod |
+|---|---|---|
+| **Stair Studio** — publiczny parametryczny konfigurator 3D schodów stalowych (strona główna) | `/` → `/konfigurator/` | `configurator/` (osobna aplikacja React + Vite) |
+| **Lead Discovery** — panel administracyjny do researchu firm | `/admin/` | `src/`, `public/admin/` |
+
+```bash
+npm install
+```
+
+```bash
+npm run build      # buduje konfigurator (configurator/dist)
+```
+
+```bash
+npm start          # http://localhost:3000/  (PORT z env)
+```
+
+## Stair Studio — konfigurator 3D schodów
+
+Parametryczny konfigurator schodów stalowych na wymiar z drewnianymi stopnicami i balustradami stalowymi lub szklanymi. Odpowiada na dwa pytania: jak schody wyglądają we wnętrzu i czy konkretne schody zmieszczą się w przestrzeni. Wszystkie teksty po polsku, jednostki w UI: cm, wewnętrznie: metry. **Narzędzie koncepcyjne** — nie zatwierdza konstrukcji statycznie ani zgodności z przepisami.
+
+**Integracja.** Istniejący projekt to Node 22 + Express bez Reacta/Vite, więc konfigurator jest osobną aplikacją Vite (`base: '/konfigurator/'`) w `configurator/` z własnym `package.json` (React 19, three.js + React Three Fiber + Drei, Zustand, Tailwind 4, Motion, lucide-react, Vitest). Express serwuje `configurator/dist` pod `/konfigurator/`, a `/` przekierowuje na konfigurator. Zależności serwera i panelu Lead Discovery nie zostały zmienione.
+
+```
+configurator/src/
+  engine/      czysta logika (bez React/three, testowana w Node): typy, katalog, obliczenia, układ I/L/U,
+               otwór i prześwit, ścieżki balustrad, walidacja, auto-dopasowanie, wymiary, zestawienie, memo
+  three/       renderowanie: geometria proceduralna scalana per materiał (geom/), materiały i tekstury
+               generowane na <canvas>, pokój, kamery, wymiary, konflikty, etykiety DOM
+  store/       Zustand + hooki pochodne (layout liczony tylko przy zmianie pokoju/schodów)
+  ui/          panel z analizą i 8 sekcjami, paski, miniatury SVG, eksport
+```
+
+- Kształty I, L (90°), U (180°) budowane od zera w układzie lokalnym (u = prawa ręka, v = kierunek wejścia), potem rotacja wg kierunku wejścia i wyrównanie w pokoju. Ciągłość: góra biegu 1 = spocznik = dół biegu 2, ostatni stopień na poziomie stropu.
+- Silnik: liczba stopni (h w 15–20 cm), podział, Blondel, kąt, otwór automatyczny (prześwit < 205 cm + ostatni bieg; krawędź wyjścia na linii ostatniego stopnia), prześwit, walidacja z przyczyną i sugestią (sugestie klikalne), status, „Dopasuj automatycznie” (szybki filtr analityczny + pełna walidacja najlepszych; brak rozwiązania → komunikat i kształty, które się zmieszczą).
+- 5 konstrukcji stalowych o różnej geometrii (belka centralna, dwa policzki, zygzak, gięta blacha, rama spawana ze słupami pośrednimi), spocznik zawsze z ramą: samonośny (belki biegów ciągłe pod spocznikiem), 4 słupy, rama + 2 słupy, do ściany.
+- 7 gatunków drewna i 7 typów balustrad, pochwyt przyścienny, balustrada spocznika i otworu; kolory RAL/własny, 4 wykończenia; LED 2700/4000 K; dzień/noc.
+- 5 trybów kamery (perspektywa, z góry — kamera ortogonalna z wymiarami rzutu, z boku — ortogonalna elewacja z wymiarami pionowymi, przekrój, poziom oczu), widoczność ścian (auto per klatka, wszystkie, półprzezroczyste, wybrane, przekrój 105 cm), czerwone bryły kolizji i brakującego prześwitu.
+- Zapis w localStorage, import/eksport JSON (konfiguracja + wyniki + zestawienie ilościowe bez cen), zrzut PNG.
+
+Testy i sprawdzenie w przeglądarce:
+
+```bash
+npm run test:configurator
+```
+
+```bash
+node configurator/scripts/browser-check.mjs http://localhost:3000/konfigurator/ ./browser-check
+```
+
+Testy Vitest (64) obejmują kryteria A–H ze specyfikacji, ciągłość L/U, prześwit przy ręcznym otworze, auto-dopasowanie (rozwiązanie / brak / inny kształt), konfigurację domyślną (20 × 17,5 cm, 10 + 10, spocznik 175 cm, Blondel 63, „Mieści się”) oraz test regresyjny (raycast), że stal nigdzie nie przebija stopnic.
+
+**Railway.** `railway.json` ustawia `buildCommand: npm run build` (instaluje i buduje `configurator/`) i `startCommand: npm start`; healthcheck `/healthz`. Serwer nasłuchuje na `process.env.PORT`. Skrypt startowy ma flagi `--experimental-strip-types --experimental-sqlite`, więc działa na każdym Node ≥ 22.12 (`.node-version`: 22). Baza SQLite panelu Lead Discovery domyślnie leży w `./data` — na Railway warto podpiąć wolumen i ustawić `DATABASE_PATH` oraz `ADMIN_PASSWORD`.
+
+---
+
+# Lead Discovery — panel administracyjny
 
 Moduł do wyszukiwania, skanowania i kwalifikowania polskich firm z wybranej branży (pierwsza branża: **producenci schodów**).
 Najważniejsza funkcja: znajdowanie **prawdziwych adresów e-mail opublikowanych na oficjalnych stronach firm** razem z dokładnym URL podstrony, na której je znaleziono.

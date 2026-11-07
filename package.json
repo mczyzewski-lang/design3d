@@ -2,17 +2,19 @@
   "name": "design3d",
   "version": "0.1.0",
   "private": true,
-  "description": "design3d.pl — panel administracyjny z modułem Lead Discovery",
+  "description": "design3d.pl — Stair Studio (konfigurator 3D schodów) + panel administracyjny Lead Discovery",
   "type": "module",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.12"
   },
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/server.ts",
-    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.ts",
-    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"test/**/*.test.ts\"",
+    "start": "node --experimental-strip-types --experimental-sqlite --disable-warning=ExperimentalWarning src/server.ts",
+    "dev": "node --experimental-strip-types --experimental-sqlite --disable-warning=ExperimentalWarning --watch src/server.ts",
+    "build": "npm ci --prefix configurator --include=dev --no-audit --no-fund && npm run build --prefix configurator",
+    "test": "node --experimental-strip-types --experimental-sqlite --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"test/**/*.test.ts\"",
+    "test:configurator": "npm test --prefix configurator",
     "typecheck": "tsc --noEmit",
-    "scan": "node --disable-warning=ExperimentalWarning src/cli/scan.ts"
+    "scan": "node --experimental-strip-types --experimental-sqlite --disable-warning=ExperimentalWarning src/cli/scan.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
