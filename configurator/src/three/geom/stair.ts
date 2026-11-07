@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { LIMITS } from '../../engine/catalog';
 import type { Config, FlightEl, Solved, StructureType, WallKey } from '../../engine/types';
-import { Parts, boxMinMax, clipHalf, extrudeZY, seeded, type MatKey, type P2 } from './primitives';
+import { Parts, beam, boxMinMax, clipHalf, cyl, extrudePlan, extrudeZY, seeded, type MatKey, type P2 } from './primitives';
 
 export interface PostInfo { x: number; z: number; yBottom: number; yTop: number; kind: 'landing' | 'intermediate' }
 
@@ -26,7 +26,7 @@ export interface StairGeometry {
 
 /** Klucz geometrii schodów — bez materiałów (zmiana drewna/koloru nie przebudowuje). */
 export function stairGeometryKey(c: Config, s: Solved): string {
-  return JSON.stringify([s.key, c.structure, c.treads.edge]);
+  return JSON.stringify([s.key, c.structure.type, c.structure.landingSupport, c.structure.closedRisers, c.treads.edge]);
 }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -67,7 +67,7 @@ function addRisers(ctx: Ctx, m: THREE.Matrix4, f: FlightEl, x0: number, x1: numb
     const top = i * h - ctx.t;
     const bottom = (i - 1) * h;
     if (top - bottom < 0.02) continue;
-    ctx.P.add('wood', boxMinMax(x0, x1, bottom, top, z - 0.018, z), m, 'riser');
+    ctx.P.add('riser', boxMinMax(x0, x1, bottom, top, z - 0.018, z), m, 'riser');
   }
 }
 
@@ -333,10 +333,95 @@ export function buildStairGeometry(c: Config, s: Solved): StairGeometry {
   const postsOut: PostInfo[] = [];
   const ctx: Ctx = { c, s, P, t: c.stairs.treadThickness, nz: c.stairs.nosing, rounded: c.treads.edge === 'rounded' ? 0.008 : 0, uvSeed: 0, postsOut };
   const meta: StairMeta = { structure: c.structure.type, elements: 0, steelElements: 0, woodElements: 0, posts: postsOut, continuousBeams: 0, landingFrame: false, wallAnchors: 0, tags: P.counts };
+  if (s.layout.spiral) buildSpiral(ctx, meta);
   for (const f of s.layout.flights) buildFlight(ctx, f);
   landingStructure(ctx, meta);
+  if (s.layout.winder) buildWinders(ctx, meta);
   meta.steelElements = P.elementCount('steel');
   meta.woodElements = P.elementCount('wood');
   meta.elements = P.elementCount();
   return { geoms: P.merge(), meta };
+}
+
+/** Stopnie zabiegowe: wielokątne stopnice na ramionach promieniowych, słup w punkcie zbiegu i w narożach zewnętrznych. */
+function buildWinders(ctx: Ctx, meta: StairMeta) {
+  const { P, c, s } = ctx;
+  const W = s.layout.winder!;
+  const t = ctx.t;
+  const piv = W.pivot;
+  for (const tr of W.treads) {
+    const poly = tr.poly!;
+    P.add('wood', extrudePlan(poly, tr.y - t, tr.y, [seeded(tr.index * 13) * 3, seeded(tr.index * 7) * 2]), undefined, 'winder');
+    // krawędź frontowa (od punktu zbiegu do obrysu) — taśma LED i podstopnica
+    const a = poly[0];
+    const b = poly[1];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const dir = { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+    const p0 = new THREE.Vector3(a.x + dir.x * 0.08, tr.y - t - 0.004, a.z + dir.z * 0.08);
+    const p1 = new THREE.Vector3(b.x - dir.x * 0.03, tr.y - t - 0.004, b.z - dir.z * 0.03);
+    P.add('led', beam(p0, p1, 0.012, 0.005), undefined, 'led');
+    if (c.structure.closedRisers) {
+      const r0 = new THREE.Vector3(a.x, tr.y - c.stairs.treadThickness - (s.calc.rise - t) / 2, a.z);
+      const r1 = new THREE.Vector3(b.x, r0.y, b.z);
+      P.add('riser', beam(r0, r1, 0.018, s.calc.rise - t), undefined, 'riser');
+    }
+    // ramię promieniowe pod stopnicą (wzdłuż dwusiecznej)
+    const mid = poly[Math.floor(poly.length / 2)];
+    const q0 = new THREE.Vector3(piv.x, tr.y - t - 0.03, piv.z);
+    const q1 = new THREE.Vector3(piv.x + (mid.x - piv.x) * 0.92, tr.y - t - 0.03, piv.z + (mid.z - piv.z) * 0.92);
+    P.add('steel', beam(q0, q1, 0.05, 0.06), undefined, 'winderArm');
+  }
+  const post = (x: number, z: number, yTop: number) => {
+    P.add('steel', boxMinMax(x - 0.04, x + 0.04, 0, yTop, z - 0.04, z + 0.04), undefined, 'winderPost');
+    P.add('steel', boxMinMax(x - 0.09, x + 0.09, 0, 0.012, z - 0.09, z + 0.09), undefined, 'anchorPlate');
+    meta.posts.push({ x, z, yBottom: 0, yTop, kind: 'landing' });
+  };
+  post(piv.x, piv.z, W.topY - t);
+  for (const cn of W.outerCorners) {
+    // najwyższy stopień zabiegowy dochodzący do naroża
+    const owners = W.treads.filter((tr) => tr.poly!.some((p) => Math.hypot(p.x - cn.x, p.z - cn.z) < 1e-6));
+    const y = (owners.length ? Math.min(...owners.map((o) => o.y)) : W.baseY) - t - 0.06;
+    const inset = 0.05;
+    const dx = Math.sign(piv.x - cn.x) * inset;
+    const dz = Math.sign(piv.z - cn.z) * inset;
+    post(cn.x + dx, cn.z + dz, y);
+  }
+  meta.landingFrame = true;
+}
+
+/** Schody kręcone: kolumna centralna, stopnie klinowe na tulejach i ramionach, górny podest w ćwiartce. */
+function buildSpiral(ctx: Ctx, meta: StairMeta) {
+  const { P, c, s } = ctx;
+  const sp = s.layout.spiral!;
+  const t = ctx.t;
+  const H = c.room.height;
+  const h = s.calc.rise;
+  const C = sp.center;
+  const rc = sp.columnRadius;
+  P.add('steel', cyl(new THREE.Vector3(C.x, 0, C.z), new THREE.Vector3(C.x, H + 0.0, C.z), rc, 24), undefined, 'column');
+  P.add('steel', boxMinMax(C.x - 0.15, C.x + 0.15, 0, 0.015, C.z - 0.15, C.z + 0.15), undefined, 'anchorPlate');
+  for (const tr of sp.treads) {
+    P.add('wood', extrudePlan(tr.poly!, tr.y - t, tr.y, [seeded(tr.index * 11) * 3, seeded(tr.index * 5) * 2]), undefined, 'tread');
+    // tuleja dystansowa
+    P.add('steel', cyl(new THREE.Vector3(C.x, tr.y - h + 0.003, C.z), new THREE.Vector3(C.x, tr.y - t, C.z), rc + 0.022, 24), undefined, 'hub');
+    // ramię pod stopniem wzdłuż dwusiecznej
+    const i = tr.index;
+    const am = sp.phi0 + sp.sense * (i - 0.5) * sp.theta;
+    const a0 = sp.phi0 + sp.sense * (i - 1) * sp.theta - sp.sense * (c.stairs.nosing / sp.walkRadius);
+    const u = { x: Math.cos(am), z: Math.sin(am) };
+    P.add('steel', beam(new THREE.Vector3(C.x + u.x * rc, tr.y - t - 0.02, C.z + u.z * rc), new THREE.Vector3(C.x + u.x * sp.radius * 0.85, tr.y - t - 0.02, C.z + u.z * sp.radius * 0.85), 0.05, 0.04), undefined, 'arm');
+    // taśma LED wzdłuż krawędzi frontowej
+    const f = { x: Math.cos(a0), z: Math.sin(a0) };
+    const rr = (r: number) => new THREE.Vector3(C.x + f.x * r, tr.y - t - 0.004, C.z + f.z * r);
+    P.add('led', beam(rr(rc + 0.06), rr(sp.radius - 0.03), 0.012, 0.005), undefined, 'led');
+  }
+  // górny podest na poziomie stropu
+  const pr = sp.platform.rect;
+  P.add('wood', boxMinMax(pr.minX, pr.maxX, H - t, H, pr.minZ, pr.maxZ, { uvOff: [0.31, 0.17] }), undefined, 'platform');
+  const fd = 0.06;
+  P.add('steel', boxMinMax(pr.minX, pr.maxX, H - t - fd, H - t, pr.minZ, pr.minZ + 0.04), undefined, 'platformFrame');
+  P.add('steel', boxMinMax(pr.minX, pr.maxX, H - t - fd, H - t, pr.maxZ - 0.04, pr.maxZ), undefined, 'platformFrame');
+  P.add('steel', boxMinMax(pr.minX, pr.minX + 0.04, H - t - fd, H - t, pr.minZ, pr.maxZ), undefined, 'platformFrame');
+  P.add('steel', boxMinMax(pr.maxX - 0.04, pr.maxX, H - t - fd, H - t, pr.minZ, pr.maxZ), undefined, 'platformFrame');
+  meta.landingFrame = true;
 }

@@ -176,3 +176,90 @@ describe('stal nie przebija stopnic', () => {
     });
   }
 });
+
+const raycastHits = (c: Config) => {
+  const s = solve(c);
+  const g = buildStairGeometry(c, s);
+  const mesh = new THREE.Mesh(g.geoms.steel!, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  const th = c.stairs.treadThickness;
+  const rc = new THREE.Raycaster();
+  const treads = [...(s.layout.winder?.treads ?? []), ...(s.layout.spiral?.treads ?? [])];
+  let hits = 0;
+  for (const tr of treads) {
+    const p = tr.poly!;
+    const cx = p.reduce((a, q) => a + q.x, 0) / p.length;
+    const cz = p.reduce((a, q) => a + q.z, 0) / p.length;
+    for (const q of p) for (const k of [0.3, 0.6, 0.85]) {
+      rc.set(new THREE.Vector3(cx + (q.x - cx) * k, tr.y - 0.001, cz + (q.z - cz) * k), new THREE.Vector3(0, -1, 0));
+      rc.far = th - 0.004;
+      if (rc.intersectObject(mesh).length) hits++;
+    }
+  }
+  return { hits, g, s };
+};
+
+describe('schody kręcone — geometria', () => {
+  test('kolumna, stopnie klinowe na tulejach, podest; stal nie przebija stopni', () => {
+    const c = cfg((x) => { x.stairs.shape = 'S'; x.stairs.spiralDiameter = 1.8; x.stairs.going = 0.24; });
+    const { hits, g, s } = raycastHits(c);
+    expect(hits).toBe(0);
+    expect(g.meta.tags.column).toBe(1);
+    expect(g.meta.tags.tread).toBe(s.layout.spiral!.treads.length);
+    expect(g.meta.tags.hub).toBe(s.layout.spiral!.treads.length);
+    expect(g.meta.tags.platform).toBe(1);
+    const r = buildRailingGeometry(c, s);
+    expect(r.meta.posts).toBeLessThan(s.layout.spiral!.treads.length); // słupki rzadziej niż co stopień
+    expect(r.meta.tags.bar).toBeGreaterThan(10);
+  });
+});
+
+describe('stopnie zabiegowe — geometria', () => {
+  for (const t of STRUCTS) {
+    test(`L + zabiegowe / ${t}`, () => {
+      const c = cfg((x) => { x.stairs.shape = 'L'; x.stairs.turnType = 'winders'; x.stairs.winders = 3; x.structure.type = t; x.room.width = 4; x.room.depth = 5; });
+      const { hits, g } = raycastHits(c);
+      expect(hits).toBe(0);
+      expect(g.meta.tags.winder).toBe(3);
+      expect(g.meta.tags.winderPost).toBeGreaterThanOrEqual(2);
+      for (const p of g.meta.posts) expect(p.yBottom).toBe(0);
+    });
+  }
+  test('U + 6 zabiegowych', () => {
+    const c = cfg((x) => { x.stairs.turnType = 'winders'; x.stairs.winders = 6; x.room.width = 3; x.room.depth = 4.5; });
+    const { hits, g } = raycastHits(c);
+    expect(hits).toBe(0);
+    expect(g.meta.tags.winder).toBe(6);
+  });
+});
+
+describe('szkło — mocowania i wykończenia', () => {
+  const glass = (p: (c: Config) => void) => { const c = cfg((x) => { x.railing.type = 'glass'; p(x); }); return buildRailingGeometry(c, solve(c)); };
+  test('punktowe / listwa U / zaciski dają różną geometrię', () => {
+    const a = glass((x) => { x.railing.glassMount = 'point'; });
+    const b = glass((x) => { x.railing.glassMount = 'channel'; });
+    const c = glass((x) => { x.railing.glassMount = 'clamps'; });
+    expect(a.meta.tags.glassFixing).toBeGreaterThan(0);
+    expect(b.meta.tags.glassChannel).toBeGreaterThan(0);
+    expect(b.meta.tags.glassFixing ?? 0).toBe(0);
+    expect(c.meta.tags.glassClamp).toBeGreaterThan(0);
+    expect(c.meta.posts).toBeGreaterThan(0);
+  });
+  test('drewniany pochwyt na szkle z drewna stopnic, nakładka stalowa, bez pochwytu', () => {
+    const w = glass((x) => { x.railing.glassTop = 'woodCap'; });
+    const st = glass((x) => { x.railing.glassTop = 'steelCap'; });
+    const no = glass((x) => { x.railing.glassTop = 'none'; });
+    expect(w.geoms.railWood).toBeDefined();
+    expect(w.meta.tags.woodCap).toBeGreaterThan(0);
+    expect(st.meta.tags.steelCap).toBeGreaterThan(0);
+    expect(st.geoms.railWood).toBeUndefined();
+    expect(no.meta.tags.woodCap ?? 0).toBe(0);
+    expect(no.meta.tags.steelCap ?? 0).toBe(0);
+  });
+  test('podstopnice jako osobny materiał (zmiana wykończenia bez przebudowy)', () => {
+    const c = cfg((x) => { x.structure.type = 'sideStringers'; x.structure.closedRisers = true; });
+    const g = buildStairGeometry(c, solve(c));
+    expect(g.geoms.riser).toBeDefined();
+    const c2 = cfg((x) => { x.structure.type = 'sideStringers'; x.structure.closedRisers = true; x.structure.riserFinish = 'white'; });
+    expect(stairGeometryKey(c2, solve(c2))).toBe(stairGeometryKey(c, solve(c)));
+  });
+});

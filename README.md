@@ -35,6 +35,9 @@ configurator/src/
   ui/          panel z analizą i 8 sekcjami, paski, miniatury SVG, eksport
 ```
 
+- **Dla firm i klientów:** link z całą konfiguracją (przycisk „Udostępnij”, `#c=…` w adresie), własne kolekcje stylu i zapisane projekty (localStorage), karta projektu do druku/PDF ze zrzutem i zestawieniem.
+- Kształty: proste (I), łamane 90° (L) i 180° (U) — ze spocznikiem **albo stopniami zabiegowymi** (L: 2–4, U: 4–7, wielokątne stopnice zbiegające się w narożu) — oraz **schody kręcone** (średnica 120–260 cm, kolumna centralna, stopnie klinowe na tulejach, obrót zaokrąglony do 90° z górnym podestem w ćwiartce otworu, kontrola prześwitu nad samą sobą i pod podestem).
+- Szkło: mocowanie punktowe / listwa dolna (profil U) / zaciski między słupkami; szkło bezbarwne, extra clear, satynowe, grafitowe, brązowe; górna krawędź: drewniany pochwyt na szkle (z drewna stopnic), nakładka stalowa lub bez pochwytu (z ostrzeżeniem). Podstopnice: drewno / biała / kolor stali.
 - Kształty I, L (90°), U (180°) budowane od zera w układzie lokalnym (u = prawa ręka, v = kierunek wejścia), potem rotacja wg kierunku wejścia i wyrównanie w pokoju. Ciągłość: góra biegu 1 = spocznik = dół biegu 2, ostatni stopień na poziomie stropu.
 - Silnik: liczba stopni (h w 15–20 cm), podział, Blondel, kąt, otwór automatyczny (prześwit < 205 cm + ostatni bieg; krawędź wyjścia na linii ostatniego stopnia), prześwit, walidacja z przyczyną i sugestią (sugestie klikalne), status, „Dopasuj automatycznie” (szybki filtr analityczny + pełna walidacja najlepszych; brak rozwiązania → komunikat i kształty, które się zmieszczą).
 - 5 konstrukcji stalowych o różnej geometrii (belka centralna, dwa policzki, zygzak, gięta blacha, rama spawana ze słupami pośrednimi), spocznik zawsze z ramą: samonośny (belki biegów ciągłe pod spocznikiem), 4 słupy, rama + 2 słupy, do ściany.
@@ -52,7 +55,7 @@ npm run test:configurator
 node configurator/scripts/browser-check.mjs http://localhost:3000/konfigurator/ ./browser-check
 ```
 
-Testy Vitest (64) obejmują kryteria A–H ze specyfikacji, ciągłość L/U, prześwit przy ręcznym otworze, auto-dopasowanie (rozwiązanie / brak / inny kształt), konfigurację domyślną (20 × 17,5 cm, 10 + 10, spocznik 175 cm, Blondel 63, „Mieści się”) oraz test regresyjny (raycast), że stal nigdzie nie przebija stopnic.
+Testy Vitest (88) obejmują kryteria A–H ze specyfikacji, ciągłość L/U, prześwit przy ręcznym otworze, auto-dopasowanie (rozwiązanie / brak / inny kształt), konfigurację domyślną (20 × 17,5 cm, 10 + 10, spocznik 175 cm, Blondel 63, „Mieści się”) oraz test regresyjny (raycast), że stal nigdzie nie przebija stopnic, a także schody kręcone (ciągłość, styczność wejścia, podest, prześwit nad spiralą, auto-dopasowanie), stopnie zabiegowe L/U (ciągłość wysokości, wielokąty wypełniające zakręt), warianty szkła i link udostępniania.
 
 **Railway.** `railway.json` ustawia `buildCommand: npm run build` (instaluje i buduje `configurator/`) i `startCommand: npm start`; healthcheck `/healthz`. Serwer nasłuchuje na `process.env.PORT`. Skrypt startowy ma flagi `--experimental-strip-types --experimental-sqlite`, więc działa na każdym Node ≥ 22.12 (`.node-version`: 22). Baza SQLite panelu Lead Discovery domyślnie leży w `./data` — na Railway warto podpiąć wolumen i ustawić `DATABASE_PATH` oraz `ADMIN_PASSWORD`.
 

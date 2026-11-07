@@ -33,7 +33,8 @@ export function CameraRig({ config, solved, view }: { config: Config; solved: So
       c.mouseButtons.left = on ? CameraControlsImpl.ACTION.TRUCK : CameraControlsImpl.ACTION.ROTATE;
       c.touches.one = on ? CameraControlsImpl.ACTION.TOUCH_TRUCK : CameraControlsImpl.ACTION.TOUCH_ROTATE;
     };
-    const f0 = solved.layout.flights[0];
+    const ed = solved.layout.entry.dir;
+    const f0 = { left: { x: ed.z, z: -ed.x } };
     switch (view.camera) {
       case 'top': {
         lock(true);

@@ -1,6 +1,6 @@
 // Współdzielone materiały — tworzone raz i aktualizowane w miejscu (zmiana koloru/drewna nie przebudowuje geometrii).
 import * as THREE from 'three';
-import { FINISHES } from '../engine/catalog';
+import { FINISHES, GLASS_TINTS } from '../engine/catalog';
 import type { Config } from '../engine/types';
 import type { MatKey } from './geom/primitives';
 import { brushedRoughness, floorTexture, meshAlpha, perforatedAlpha, wallTexture, woodTextures } from './textures';
@@ -21,6 +21,7 @@ export function createMaterials(): Materials {
   const w = woodTextures('oakNatural');
   const wood = new THREE.MeshStandardMaterial({ map: w.map, bumpMap: w.bump, bumpScale: 0.6, roughness: 0.58, metalness: 0 });
   const railWood = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.55, metalness: 0 });
+  const riser = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.6, metalness: 0 });
   const led = new THREE.MeshStandardMaterial({ color: '#ffd2a1', emissive: new THREE.Color('#ffb46b'), emissiveIntensity: 2, toneMapped: false });
   const glass = new THREE.MeshPhysicalMaterial({ color: '#d9efe9', roughness: 0.04, metalness: 0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.2 });
   const glassEdge = new THREE.MeshStandardMaterial({ color: '#4f9c84', roughness: 0.15, transparent: true, opacity: 0.85 });
@@ -30,7 +31,7 @@ export function createMaterials(): Materials {
   mesh.alphaToCoverage = true;
   const wallTex = wallTexture();
   return {
-    stair: { steel, railSteel, wood, railWood, led, glass, glassEdge, perforated, mesh },
+    stair: { steel, railSteel, wood, riser, railWood, led, glass, glassEdge, perforated, mesh },
     floor: new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.6 }),
     upperFloor: new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.6 }),
     wall: new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.92, color: '#ffffff' }),
@@ -71,8 +72,22 @@ export function updateMaterials(M: Materials, c: Config): void {
     s.wood.bumpMap = w.bump;
     s.railWood.map = w.map;
     s.wood.needsUpdate = true;
+    if (c.structure.riserFinish === 'wood') { s.riser.map = w.map; s.riser.needsUpdate = true; }
     s.railWood.needsUpdate = true;
   }
+  // podstopnice
+  const rf = c.structure.riserFinish;
+  const riserMap = rf === 'wood' ? w.map : null;
+  if (s.riser.map !== riserMap) { s.riser.map = riserMap; s.riser.needsUpdate = true; }
+  s.riser.color.set(rf === 'white' ? '#f3f1ec' : rf === 'steel' ? c.steel.color : '#ffffff');
+  s.riser.roughness = rf === 'steel' ? s.steel.roughness : 0.6;
+  s.riser.metalness = rf === 'steel' ? s.steel.metalness : 0;
+  // szkło
+  const tint = GLASS_TINTS.find((g) => g.key === c.railing.glassTint) ?? GLASS_TINTS[0];
+  s.glass.color.set(tint.color);
+  s.glass.opacity = tint.opacity;
+  s.glass.roughness = tint.roughness;
+  s.glassEdge.color.set(tint.edge);
   const L = c.lighting;
   s.led.visible = L.led;
   s.led.emissive.set(LED_COLOR[L.ledTemp] ?? LED_COLOR[2700]);

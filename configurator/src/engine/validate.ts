@@ -13,6 +13,7 @@ export const cm = (m: number, digits = 1): string => {
 };
 
 export function railFlags(c: Config) {
+  if (c.stairs.shape === 'S') return { outer: c.railing.outer !== 'none', inner: false, landing: false };
   return { outer: c.railing.outer === 'balustrade', inner: c.railing.inner === 'balustrade' && c.stairs.shape === 'I', landing: c.railing.landing };
 }
 
@@ -103,7 +104,19 @@ export function validate(c: Config, calc: Calc, layout: Layout, fit: Fit, openin
   } else if (h < LIMITS.riserMin - 1e-9) {
     m.push({ id: 'riser', level: 'warning', title: 'Bardzo niskie stopnie.', cause: `Wysokość stopnia ${cm(h)} cm < ${cm(LIMITS.riserMin)} cm.`, suggestion: 'Zmniejsz liczbę stopni.' });
   }
-  if (s.going < LIMITS.goingMin - 1e-9) {
+  const spiral = s.shape === 'S';
+  if (spiral) {
+    const g = calc.going;
+    const sp = calc.spiral!;
+    if (g < LIMITS.spiralGoingMin - 1e-9) m.push({ id: 'going', level: 'error', title: 'Za płytki stopień na linii chodu.', cause: `Krok na linii chodu ${cm(g)} cm < ${cm(LIMITS.spiralGoingMin)} cm.`, suggestion: 'Zwiększ średnicę schodów lub krok.' });
+    else if (g < LIMITS.spiralGoingWarn - 1e-9) m.push({ id: 'going', level: 'warning', title: 'Płytki stopień na linii chodu.', cause: `Krok na linii chodu ${cm(g)} cm (zalecane ≥ ${cm(LIMITS.spiralGoingWarn)} cm).`, suggestion: 'Zwiększ średnicę schodów lub krok.' });
+    if (sp.treadWidth < LIMITS.spiralTreadWidthWarn - 1e-9) m.push({ id: 'spiral-width', level: 'warning', title: 'Wąskie stopnie schodów kręconych.', cause: `Szerokość użytkowa stopnia ${cm(sp.treadWidth)} cm (zalecane ≥ ${cm(LIMITS.spiralTreadWidthWarn)} cm).`, suggestion: 'Zwiększ średnicę schodów.' });
+    const self = layout.spiral!.selfHeadroom;
+    if (self < LIMITS.spiralSelfHeadroom - 1e-9) {
+      m.push({ id: 'spiral-self', level: 'error', title: 'Za mało miejsca nad głową na spirali.', cause: `Po pełnym obrocie stopień jest tylko ${cm(self)} cm nad poprzednim (wymagane ok. ${cm(LIMITS.spiralSelfHeadroom)} cm).`, suggestion: 'Zwiększ krok lub średnicę (mniej stopni na obrót) albo wysokość stopnia.' });
+    }
+    m.push({ id: 'spiral-info', level: 'info', title: 'Schody kręcone.', cause: `${cm(sp.radius * 2)} cm średnicy, obrót ${Math.round((sp.sweep * 180) / Math.PI)}°, ${sp.risersPerTurn.toFixed(1).replace('.', ',')} stopnia na pełny obrót, linia chodu ${cm(sp.walkRadius)} cm od osi.` });
+  } else if (s.going < LIMITS.goingMin - 1e-9) {
     m.push({ id: 'going', level: 'error', title: 'Za płytki stopień.', cause: `Krok ${cm(s.going)} cm < ${cm(LIMITS.goingMin)} cm.`, suggestion: 'Zwiększ głębokość stopnia.' });
   } else if (s.going < LIMITS.goingWarn - 1e-9) {
     m.push({ id: 'going', level: 'warning', title: 'Płytki stopień.', cause: `Krok ${cm(s.going)} cm (zalecane ≥ ${cm(LIMITS.goingWarn)} cm).`, suggestion: 'Zwiększ głębokość stopnia.' });
@@ -121,12 +134,21 @@ export function validate(c: Config, calc: Calc, layout: Layout, fit: Fit, openin
   } else if (calc.angleDeg > LIMITS.angleWarn) {
     m.push({ id: 'angle', level: 'warning', title: 'Duże nachylenie.', cause: `Kąt ${calc.angleDeg.toFixed(1).replace('.', ',')}° > ${LIMITS.angleWarn}°.`, suggestion: 'Zwiększ krok.' });
   }
-  calc.flights.forEach((f, i) => {
+  if (layout.winder) {
+    const wd = layout.winder;
+    if (wd.walkGoing < LIMITS.winderGoingWarn - 1e-9) {
+      m.push({ id: 'winders', level: 'warning', title: 'Płytkie stopnie zabiegowe.', cause: `Stopnie zabiegowe na linii chodu mają ${cm(wd.walkGoing)} cm (zalecane ≥ ${cm(LIMITS.winderGoingWarn)} cm).`, suggestion: 'Zmniejsz liczbę stopni zabiegowych, poszerz bieg lub wybierz spocznik.' });
+    }
+    if (wd.minInnerGoing < LIMITS.winderInnerMin - 1e-9) {
+      m.push({ id: 'winders-inner', level: 'info', title: 'Wąskie końce stopni zabiegowych.', cause: `Przy wewnętrznym narożu stopnie mają ok. ${cm(wd.minInnerGoing)} cm (15 cm od naroża).` });
+    }
+  }
+  if (!spiral) calc.flights.forEach((f, i) => {
     if (f.risers > LIMITS.maxRisersPerFlight) {
       m.push({ id: `flight-${i}`, level: 'warning', title: 'Zalecana zmiana liczby stopni.', cause: `Bieg ${i + 1} ma ${f.risers} stopni (zalecane ≤ ${LIMITS.maxRisersPerFlight} w jednym biegu).`, suggestion: s.shape === 'I' ? 'Rozważ schody L lub U ze spocznikiem.' : 'Zmień podział stopni między biegami.' });
     }
   });
-  if (s.shape === 'U' && s.landingDepth < s.width - 1e-9) {
+  if (s.shape === 'U' && !layout.winder && s.landingDepth < s.width - 1e-9) {
     m.push({ id: 'landing', level: 'warning', title: 'Spocznik krótszy niż szerokość biegu.', cause: `Spocznik ${cm(s.landingDepth)} cm < szerokość biegu ${cm(s.width)} cm.`, suggestion: `Wydłuż spocznik do ${cm(s.width)} cm.` });
   }
   if (opening.headroomShortfalls.length) {
@@ -166,6 +188,12 @@ export function validate(c: Config, calc: Calc, layout: Layout, fit: Fit, openin
   const sideName = (side: 'outer' | 'inner') => (s.shape === 'I' ? (side === 'outer' ? 'lewa' : 'prawa') : side === 'outer' ? 'zewnętrzna' : 'wewnętrzna');
   for (const side of ['outer', 'inner'] as const) {
     const mode = side === 'outer' ? rc.outer : rc.inner;
+    if (spiral) {
+      if (side === 'inner') continue; // kolumna centralna pełni rolę wewnętrznej krawędzi
+      if (mode === 'none') m.push({ id: 'open-outer', level: 'warning', title: 'Otwarta krawędź bez balustrady.', cause: 'Zewnętrzna krawędź schodów kręconych nie ma balustrady.', suggestion: 'Dodaj balustradę spiralną.' });
+      if (mode === 'wallHandrail') m.push({ id: 'wall-outer', level: 'warning', title: 'Pochwyt przyścienny niedostępny dla schodów kręconych.', cause: 'Schody kręcone są wolnostojące — pokazano balustradę spiralną.', suggestion: 'Wybierz balustradę.' });
+      continue;
+    }
     if (side === 'inner' && s.shape === 'U' && s.gap <= LIMITS.narrowGap + 1e-9) continue;
     const walled = sideAgainstWall(c, layout, side);
     if (mode === 'none' && !walled) {
@@ -175,7 +203,10 @@ export function validate(c: Config, calc: Calc, layout: Layout, fit: Fit, openin
       m.push({ id: `wall-${side}`, level: 'warning', title: 'Pochwyt przyścienny bez ściany.', cause: `Strona ${sideName(side)} nie przylega do ściany — pochwyt nie ma do czego się mocować.`, suggestion: 'Ustaw schody przy ścianie lub wybierz balustradę.' });
     }
   }
-  if (s.shape !== 'I' && rc.outer === 'balustrade' && !rc.landing && !landingAgainstWalls(c, layout)) {
+  if (rc.type === 'glass' && rc.glassTop === 'none' && anyBalustrade && rc.inner !== 'wallHandrail' && rc.outer !== 'wallHandrail') {
+    m.push({ id: 'glass-handrail', level: 'warning', title: 'Szklana balustrada bez pochwytu.', cause: 'Brak pochwytu na tafli i brak pochwytu przyściennego.', suggestion: 'Dodaj drewniany pochwyt na szkle lub nakładkę stalową.' });
+  }
+  if (!spiral && s.shape !== 'I' && !layout.winder && rc.outer === 'balustrade' && !rc.landing && !landingAgainstWalls(c, layout)) {
     m.push({ id: 'open-landing', level: 'warning', title: 'Otwarta krawędź spocznika.', cause: 'Spocznik ma krawędzie, które nie przylegają do ściany i nie mają balustrady.', suggestion: 'Włącz balustradę wokół spocznika.' });
   }
   if (rc.outer === 'none' && rc.inner === 'none') {
@@ -192,8 +223,11 @@ export function validate(c: Config, calc: Calc, layout: Layout, fit: Fit, openin
     bentPlate: 'Gięta blacha: przy dłuższych biegach może wymagać dodatkowego mocowania do ściany.',
     weldedFrame: 'Rama spawana ze słupami pośrednimi pod biegami dłuższymi niż ok. 1,6 m.',
   };
-  m.push({ id: 'anchor', level: 'info', title: 'Kotwienie konstrukcji.', cause: infos[st.type] });
-  if (s.shape !== 'I') {
+  if (spiral) m.push({ id: 'anchor', level: 'info', title: 'Kotwienie konstrukcji.', cause: 'Kolumna centralna Ø120 mm kotwiona w posadzce i stropie, stopnie na tulejach dystansowych, górny podest mocowany do czoła stropu.' });
+  else m.push({ id: 'anchor', level: 'info', title: 'Kotwienie konstrukcji.', cause: infos[st.type] });
+  if (layout.winder) {
+    m.push({ id: 'landing-support', level: 'info', title: 'Stopnie zabiegowe.', cause: `${layout.winder.treads.length} stopnie zabiegowe na ramie stalowej z ramionami promieniowymi i słupem w narożu zewnętrznym.` });
+  } else if (s.shape !== 'I' && !spiral) {
     const ls: Record<string, string> = {
       none: 'Spocznik samonośny: rama skrzynkowa zespolona z belkami biegów, kotwienie wyłącznie w posadzce i stropie.',
       fourPosts: 'Spocznik na 4 słupach sięgających posadzki.',
@@ -248,6 +282,22 @@ export function buildSuggestions(c: Config, calc: Calc, fit: Fit, opening: Openi
       if (sh === s.shape) continue;
       if (fitsWith(withStairs(c, { shape: sh, splitMode: 'auto' }))) out.push({ id: `shape-${sh}`, label: `Zmień kształt na ${SHAPE_LABEL[sh]}`, patch: { stairs: { shape: sh, splitMode: 'auto' } } });
     }
+    if (s.shape !== 'S') {
+      search: for (const d of [1.6, 1.8, 1.4, 2.0, 2.2]) {
+        for (const g of [0.22, 0.24, 0.26, 0.2]) {
+          const p = { shape: 'S' as Shape, spiralDiameter: d, going: g };
+          const cfg = withStairs(c, p);
+          const q = quickSolve(cfg);
+          if (!q.fit.fits || q.opening.headroomShortfalls.length || q.layout.spiral!.selfHeadroom < LIMITS.spiralSelfHeadroom) continue;
+          if (q.calc.going < LIMITS.spiralGoingMin) continue;
+          out.push({ id: 'shape-S', label: `Zmień na schody kręcone Ø${cm(d, 0)} cm`, patch: { stairs: p } });
+          break search;
+        }
+      }
+    }
+    if (s.shape === 'L' && !calc.winders && fitsWith(withStairs(c, { turnType: 'winders', winders: 3 }))) {
+      out.push({ id: 'winders', label: 'Zastąp spocznik stopniami zabiegowymi', patch: { stairs: { turnType: 'winders', winders: 3 } } });
+    }
     for (const e of ['back', 'front', 'left', 'right'] as EntryDir[]) {
       if (e === s.entry) continue;
       if (fitsWith(withStairs(c, { entry: e }))) { out.push({ id: `entry-${e}`, label: `Zmień kierunek wejścia: ${ENTRY_LABEL[e]}`, patch: { stairs: { entry: e } } }); }
@@ -255,7 +305,7 @@ export function buildSuggestions(c: Config, calc: Calc, fit: Fit, opening: Openi
     if (s.shape !== 'I' && s.landingDepth > s.width + 1e-6 && fitsWith(withStairs(c, { landingDepth: s.width }))) {
       out.push({ id: 'landing', label: `Skróć spocznik do ${cm(s.width)} cm`, patch: { stairs: { landingDepth: s.width } } });
     }
-    if (s.shape !== 'I') {
+    if (s.shape === 'L' || s.shape === 'U') {
       const N = calc.risers;
       for (let d = 1; d < N; d++) {
         const cand = [calc.flights[0].risers + d, calc.flights[0].risers - d].filter((n) => n >= 2 && n <= N - 2);

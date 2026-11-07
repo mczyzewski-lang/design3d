@@ -69,12 +69,28 @@ export function dimensionSpecs(c: Config, s: Solved, view: DimView, sideFlip = f
       const q1 = v(q0.x + (p1.x - p0.x) * (Math.abs(f0.dir.x) < 0.5 ? 1 : 0), y, q0.z + (p1.z - p0.z) * (Math.abs(f0.dir.z) < 0.5 ? 1 : 0));
       out.push({ id: 't-gap', a: q0, b: q1, dir: v(f0.dir.x, 0, f0.dir.z), offset: 0, label: `odstęp ${cm(c.stairs.gap)}`, kind: 'stair' });
     }
+    if (L.spiral) {
+      const sp = L.spiral;
+      out.push({ id: 't-dia', a: v(sp.center.x - sp.radius, y, sp.center.z), b: v(sp.center.x + sp.radius, y, sp.center.z), dir: v(0, 0, 1), offset: 0, label: `Ø ${cm(sp.radius * 2)}`, kind: 'stair' });
+    }
     const o = s.opening.rect;
     out.push({ id: 't-ow', a: v(o.minX, y, o.maxZ), b: v(o.maxX, y, o.maxZ), dir: v(0, 0, 1), offset: 0.22, label: `otwór ${cm(o.maxX - o.minX)}`, kind: 'opening' });
     out.push({ id: 't-od', a: v(o.maxX, y, o.minZ), b: v(o.maxX, y, o.maxZ), dir: v(1, 0, 0), offset: 0.22, label: `otwór ${cm(o.maxZ - o.minZ)}`, kind: 'opening' });
     return out;
   }
-  // widok z boku: elewacja prostopadła do biegu 1
+  // widok z boku: elewacja prostopadła do biegu 1 (dla spirali — do kierunku wejścia)
+  if (L.spiral) {
+    const sp = L.spiral;
+    const d = L.entry.dir;
+    const back = { x: sp.center.x - d.x * (sp.radius + 0.4), z: sp.center.z - d.z * (sp.radius + 0.4) };
+    const h = s.calc.rise;
+    out.push({ id: 's-H', a: v(back.x, 0, back.z), b: v(back.x, H, back.z), dir: v(-d.x, 0, -d.z), offset: 0.25, label: `H ${cm(H)}`, kind: 'vertical' });
+    const fr = { x: sp.center.x + d.x * (sp.radius + 0.25), z: sp.center.z + d.z * (sp.radius + 0.25) };
+    out.push({ id: 's-slab', a: v(fr.x, H - c.room.slabThickness, fr.z), b: v(fr.x, H, fr.z), dir: v(d.x, 0, d.z), offset: 0.15, label: `strop ${cm(c.room.slabThickness)}`, kind: 'vertical' });
+    out.push({ id: 's-h', a: v(back.x + d.x * 0.3, 0, back.z + d.z * 0.3), b: v(back.x + d.x * 0.3, h, back.z + d.z * 0.3), dir: v(-d.x, 0, -d.z), offset: 0.08, label: `h ${cm(h)}`, kind: 'vertical' });
+    out.push({ id: 's-dia', a: v(sp.center.x - d.x * sp.radius, 0, sp.center.z - d.z * sp.radius), b: v(sp.center.x + d.x * sp.radius, 0, sp.center.z + d.z * sp.radius), dir: v(0, -1, 0), offset: 0.18, label: `Ø ${cm(sp.radius * 2)}`, kind: 'stair' });
+    return out;
+  }
   const f0 = L.flights[0];
   const side = sideFlip ? -1 : 1;
   const n = { x: f0.left.x * side, z: f0.left.z * side }; // kierunek do kamery

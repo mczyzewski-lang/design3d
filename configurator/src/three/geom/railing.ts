@@ -9,7 +9,7 @@ export interface RailingGeometry { geoms: Partial<Record<MatKey, THREE.BufferGeo
 
 export function railingGeometryKey(c: Config, s: Solved): string {
   const r = c.railing;
-  return JSON.stringify([s.key, r.handrail, r.handrailMaterial]);
+  return JSON.stringify([s.key, r.handrail, r.handrailMaterial, r.glassMount, r.glassTop]);
 }
 
 const V = (p: Vec3, dy = 0) => new THREE.Vector3(p.x, p.y + dy, p.z);
@@ -37,16 +37,33 @@ export function buildRailingGeometry(c: Config, s: Solved): RailingGeometry {
     const pts = path.points;
     const glass = rc.type === 'glass';
     const hasPosts = spec.hasPosts;
-    // pochwyt ciągły z przegubami w narożnikach
-    for (let i = 0; i < pts.length - 1; i++) handrail(P, hrMat, rc.handrail, V(pts[i], H), V(pts[i + 1], H));
-    if (rc.handrail === 'round') for (let i = 1; i < pts.length - 1; i++) P.add(hrMat, sphere(V(pts[i], H), 0.021), undefined, 'joint');
+    // pochwyt ciągły z przegubami w narożnikach (szkło: nakładka wg wyboru)
+    if (!glass) {
+      for (let i = 0; i < pts.length - 1; i++) handrail(P, hrMat, rc.handrail, V(pts[i], H), V(pts[i + 1], H));
+      if (rc.handrail === 'round') for (let i = 1; i < pts.length - 1; i++) P.add(hrMat, sphere(V(pts[i], H), 0.021), undefined, 'joint');
+    } else if (rc.glassTop !== 'none') {
+      const wood = rc.glassTop === 'woodCap';
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (planLen(pts[i], pts[i + 1]) < 1e-6) continue;
+        P.add(wood ? 'railWood' : 'railSteel', beam(V(pts[i], H - (wood ? 0.02 : 0.012)), V(pts[i + 1], H - (wood ? 0.02 : 0.012)), wood ? 0.056 : rc.glassThickness + 0.012, wood ? 0.042 : 0.026), undefined, wood ? 'woodCap' : 'steelCap');
+      }
+    }
     // słupki: w narożnikach i na końcach (oprócz szkła), dodatkowo co ≤ 1 m dla wypełnień panelowych / poziomych
     const postAt = (p: Vec3) => {
       const bottom = path.scope === 'opening' ? p.y : p.y - 0.12;
       P.add('railSteel', boxMinMax(p.x - 0.02, p.x + 0.02, bottom, p.y + H - 0.02, p.z - 0.02, p.z + 0.02), undefined, 'post');
       meta.posts++;
     };
-    if (!glass) pts.forEach((p, i) => { if (i === 0 || i === pts.length - 1 || planLen(pts[i - 1], p) > 1e-6) postAt(p); });
+    const clamps = glass && rc.glassMount === 'clamps';
+    if (!glass || clamps) {
+      if (path.smooth) {
+        let acc = 0;
+        pts.forEach((p, i) => {
+          if (i > 0) acc += planLen(pts[i - 1], p);
+          if (i === 0 || i === pts.length - 1 || acc >= 1.0) { postAt(p); acc = 0; }
+        });
+      } else pts.forEach((p, i) => { if (i === 0 || i === pts.length - 1 || planLen(pts[i - 1], p) > 1e-6) postAt(p); });
+    }
 
     for (let i = 0; i < pts.length - 1; i++) {
       const A = pts[i];
@@ -54,7 +71,7 @@ export function buildRailingGeometry(c: Config, s: Solved): RailingGeometry {
       const Lp = planLen(A, B);
       if (Lp < 0.04) continue;
       // podział segmentu na pola między słupkami (co ≤ 1 m)
-      const fields = hasPosts ? Math.max(1, Math.ceil(Lp / 1.0)) : 1;
+      const fields = (hasPosts || clamps) && !path.smooth ? Math.max(1, Math.ceil(Lp / (clamps ? 1.2 : 1.0))) : 1;
       for (let k = 1; k < fields; k++) postAt(lerp(A, B, k / fields));
       const ins = (glass ? 0.008 : 0.025) / Lp;
       switch (rc.type) {
@@ -107,12 +124,41 @@ export function buildRailingGeometry(c: Config, s: Solved): RailingGeometry {
           break;
         }
         case 'glass': {
+          const mount = rc.glassMount;
+          const top = rc.glassTop === 'woodCap' ? H - 0.04 : rc.glassTop === 'steelCap' ? H - 0.022 : H;
+          const opening = path.scope === 'opening';
+          if (mount === 'clamps') {
+            // tafle między słupkami w zaciskach
+            for (let k = 0; k < fields; k++) {
+              const a = lerp(A, B, k / fields + 0.035 / Lp);
+              const b = lerp(A, B, (k + 1) / fields - 0.035 / Lp);
+              const y0 = 0.06;
+              P.add('glass', panelPrism([V(a, y0), V(b, y0), V(b, top), V(a, top)], rc.glassThickness), undefined, 'glassPanel');
+              for (const p of [a, b]) for (const yy of [0.18, top - 0.15]) {
+                P.add('railSteel', boxMinMax(p.x - 0.022, p.x + 0.022, p.y + yy - 0.025, p.y + yy + 0.025, p.z - 0.022, p.z + 0.022), undefined, 'glassClamp');
+              }
+              meta.panels++;
+            }
+            meta.infill++;
+            break;
+          }
           const a = lerp(A, B, ins);
           const b = lerp(A, B, 1 - ins);
-          const y0 = path.scope === 'opening' ? 0.02 : -0.1;
-          const y1 = H - 0.035;
+          const y0 = mount === 'channel' ? (opening ? 0.02 : -0.13) : opening ? 0.02 : -0.1;
+          const y1 = top;
           const quad = [V(a, y0), V(b, y0), V(b, y1), V(a, y1)];
           P.add('glass', panelPrism(quad, rc.glassThickness), undefined, 'glassPanel');
+          if (mount === 'channel') {
+            // ciągły profil U (listwa dolna)
+            const cy = opening ? 0.06 : -0.08;
+            P.add('railSteel', beam(V(A, cy), V(B, cy), 0.065, 0.12), undefined, 'glassChannel');
+            meta.panels++;
+            meta.infill++;
+            const e = 0.003;
+            const th = rc.glassThickness * 0.9;
+            P.add('glassEdge', beam(V(a, y1), V(b, y1), th, e), undefined, 'glassEdge');
+            break;
+          }
           // widoczne zielonkawe krawędzie
           const e = 0.003;
           const th = rc.glassThickness * 0.9;
@@ -122,7 +168,8 @@ export function buildRailingGeometry(c: Config, s: Solved): RailingGeometry {
           P.add('glassEdge', beam(V(b, y0), V(b, y1), th, e, new THREE.Vector3(B.x - A.x, 0, B.z - A.z).normalize()), undefined, 'glassEdge');
           // uchwyty punktowe (prostopadle do tafli)
           const nrm = new THREE.Vector3(-(B.z - A.z), 0, B.x - A.x).normalize().multiplyScalar(0.035);
-          const holders = Math.max(2, Math.ceil(Lp / 0.6) + 1);
+          // na helisie spirali uchwyt co trzeci odcinek (odcinki są krótkie)
+          const holders = path.smooth ? (i % 3 === 0 ? 1 : 0) : Math.max(2, Math.ceil(Lp / 0.6) + 1);
           for (let j = 0; j < holders; j++) {
             const p = lerp(a, b, (j + 0.5) / holders);
             const c0 = V(p, path.scope === 'opening' ? 0.08 : -0.05);

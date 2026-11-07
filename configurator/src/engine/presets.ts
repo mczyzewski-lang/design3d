@@ -68,6 +68,24 @@ export const COLLECTIONS: Collection[] = [
     railing: { type: 'solid', handrail: 'flat', handrailMaterial: 'steel', separateColor: true, color: '#bfa982' },
     lighting: { led: true, ledTemp: 2700 },
   },
+  {
+    key: 'glassOak',
+    label: 'Glass & Oak',
+    description: 'Szkło extra clear w listwie dolnej z dębowym pochwytem, belka centralna w antracycie.',
+    structure: { type: 'centralBeam', landingSupport: 'none', closedRisers: false },
+    treads: { wood: 'oakNatural', edge: 'rounded' },
+    steel: { preset: 'anthracite', color: '#373f43', finish: 'powder' },
+    railing: { type: 'glass', glassMount: 'channel', glassTint: 'extraClear', glassTop: 'woodCap', glassThickness: 0.0176, separateColor: false },
+  },
+  {
+    key: 'nordicFrost',
+    label: 'Nordic Frost',
+    description: 'Gięta blacha w bieli, jesion, szkło satynowe w zaciskach, białe podstopnice.',
+    structure: { type: 'bentPlate', landingSupport: 'wall', closedRisers: true, riserFinish: 'white' },
+    treads: { wood: 'ashNatural', edge: 'rounded' },
+    steel: { preset: 'white', color: '#f1f0ea', finish: 'powder' },
+    railing: { type: 'glass', glassMount: 'clamps', glassTint: 'frosted', glassTop: 'steelCap', glassThickness: 0.0176, separateColor: false },
+  },
 ];
 
 export function applyCollection(cfg: Config, key: string): Config {

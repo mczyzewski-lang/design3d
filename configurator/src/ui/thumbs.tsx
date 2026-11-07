@@ -9,6 +9,7 @@ export function ShapeThumb({ shape }: { shape: Shape }) {
     <svg viewBox="0 0 60 44" className="h-full w-full">
       {shape === 'I' && (<><rect x="23" y="4" width="14" height="36" rx="1" {...S} />{steps(23, 8, 14, 8, 4)}</>)}
       {shape === 'L' && (<><path d="M16 40 V8 H48 V20 H28 V40 Z" {...S} />{steps(16, 24, 12, 4, 4)}<rect x="16" y="8" width="12" height="12" fill="currentColor" opacity="0.12" /></>)}
+      {shape === 'S' && (<><circle cx="30" cy="22" r="17" {...S} /><circle cx="30" cy="22" r="2.6" fill="currentColor" />{Array.from({ length: 10 }, (_, i) => { const a = (i / 10) * Math.PI * 1.75 + Math.PI; return <line key={i} x1={30 + 2.6 * Math.cos(a)} y1={22 + 2.6 * Math.sin(a)} x2={30 + 17 * Math.cos(a)} y2={22 + 17 * Math.sin(a)} {...S} strokeWidth={0.9} opacity={0.6} />; })}<path d="M30 22 L47 22 L47 5 L30 5 Z" fill="currentColor" opacity="0.12" /></>)}
       {shape === 'U' && (<><path d="M14 40 V6 H46 V40 H34 V18 H26 V40 Z" {...S} />{steps(14, 22, 12, 5, 4)}{steps(34, 22, 12, 5, 4)}<rect x="14" y="6" width="32" height="12" fill="currentColor" opacity="0.12" /></>)}
     </svg>
   );

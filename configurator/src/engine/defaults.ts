@@ -15,6 +15,9 @@ export const DEFAULT_CONFIG: Config = {
   stairs: {
     shape: 'U',
     turn: 'right',
+    turnType: 'landing',
+    winders: 3,
+    spiralDiameter: 1.6,
     width: 0.95,
     going: 0.28,
     treadThickness: 0.04,
@@ -35,7 +38,7 @@ export const DEFAULT_CONFIG: Config = {
     wallGap: 0.08,
     opening: { mode: 'auto', length: 3.0, width: 2.1 },
   },
-  structure: { type: 'centralBeam', landingSupport: 'none', closedRisers: false },
+  structure: { type: 'centralBeam', landingSupport: 'none', closedRisers: false, riserFinish: 'wood' },
   treads: { wood: 'oakNatural', edge: 'square' },
   steel: { preset: 'black', color: '#141414', finish: 'powder' },
   railing: {
@@ -50,6 +53,9 @@ export const DEFAULT_CONFIG: Config = {
     landing: true,
     opening: true,
     glassThickness: 0.0176,
+    glassMount: 'point',
+    glassTint: 'clear',
+    glassTop: 'woodCap',
     separateColor: false,
     color: '#141414',
   },

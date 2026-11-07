@@ -27,10 +27,12 @@ export function Lighting({ config, solved }: { config: Config; solved: Solved })
     cam.updateProjectionMatrix();
   }, [W, D, H]);
   // ciepłe światło od taśm LED w nocy: jedno źródło na bieg
-  const ledLights = useMemo(() => solved.layout.flights.map((f) => {
+  const ledLights = useMemo(() => solved.layout.spiral
+    ? [[solved.layout.spiral.center.x, H * 0.45, solved.layout.spiral.center.z] as [number, number, number]]
+    : solved.layout.flights.map((f) => {
     const mid = f.length / 2;
     return [f.origin.x + f.dir.x * mid, f.baseY + (f.topY - f.baseY) / 2 - 0.2, f.origin.z + f.dir.z * mid] as [number, number, number];
-  }), [solved.layout]);
+  }), [solved.layout, H]);
   const ledColor = lighting.ledTemp === 2700 ? '#ffb46b' : '#ffe2c2';
   return (
     <>

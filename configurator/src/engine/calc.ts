@@ -13,22 +13,56 @@ export function autoRiserCount(H: number, preferred: number): number {
 }
 
 export function riserCount(room: RoomConfig, s: StairConfig): number {
-  if (s.stepsMode === 'manual') return Math.max(s.shape === 'I' ? 2 : 4, Math.round(s.manualSteps));
+  if (s.stepsMode === 'manual') return Math.max(s.shape === 'I' || s.shape === 'S' ? 2 : 4 + windersOf(s), Math.round(s.manualSteps));
   return autoRiserCount(room.height, s.preferredRiser);
 }
 
-/** Podział podnoszeń na biegi [bieg1, bieg2]. Każdy bieg ma co najmniej 2 podnoszenia (≥1 stopnica). */
-export function splitRisers(shape: Shape, N: number, mode: 'auto' | 'manual', manual: number): number[] {
-  if (shape === 'I') return [N];
-  let n1 = mode === 'manual' ? Math.round(manual) : Math.ceil(N / 2);
-  n1 = Math.min(Math.max(n1, 2), N - 2);
-  return [n1, N - n1];
+/** Liczba stopni zabiegowych (0 = spocznik lub kształt bez zakrętu). */
+export function windersOf(s: Pick<StairConfig, 'shape' | 'turnType' | 'winders'>): number {
+  if (s.turnType !== 'winders' || (s.shape !== 'L' && s.shape !== 'U')) return 0;
+  return s.shape === 'L' ? Math.min(4, Math.max(2, Math.round(s.winders))) : Math.min(7, Math.max(4, Math.round(s.winders)));
+}
+
+/**
+ * Podział podnoszeń na biegi [bieg1, bieg2]. Każdy bieg ma co najmniej 2 podnoszenia (≥1 stopnica).
+ * Przy stopniach zabiegowych (k): stopnice = (n1−1) + k + (n2−1) = N − 1  →  n1 + n2 = N − k + 1.
+ */
+export function splitRisers(shape: Shape, N: number, mode: 'auto' | 'manual', manual: number, winders = 0): number[] {
+  if (shape === 'I' || shape === 'S') return [N];
+  const total = N - winders + (winders ? 1 : 0);
+  let n1 = mode === 'manual' ? Math.round(manual) : Math.ceil(total / 2);
+  n1 = Math.min(Math.max(n1, 2), total - 2);
+  return [n1, total - n1];
+}
+
+/** Schody kręcone: kąt stopnia dobrany z kroku na linii chodu, kąt całkowity zaokrąglony do 90° (górny podest w ćwiartce). */
+export function spiralParams(s: StairConfig, N: number, rise: number, t: number) {
+  const R = Math.min(LIMITS.spiralMaxDiameter, Math.max(LIMITS.spiralMinDiameter, s.spiralDiameter)) / 2;
+  const rc = LIMITS.spiralColumnRadius;
+  const rw = rc + (R - rc) * LIMITS.spiralWalkFactor;
+  const nT = Math.max(1, N - 1);
+  const raw = (nT * s.going) / rw;
+  const q = Math.PI / 2;
+  const sweep = Math.max(2 * q, Math.round(raw / q) * q);
+  const theta = sweep / nT;
+  const risersPerTurn = (2 * Math.PI) / theta;
+  return { radius: R, columnRadius: rc, walkRadius: rw, theta, sweep, risersPerTurn, treadWidth: R - rc, selfHeadroom: risersPerTurn * rise - t };
 }
 
 export function computeCalc(room: RoomConfig, s: StairConfig): Calc {
   const N = riserCount(room, s);
   const h = room.height / N;
-  const split = splitRisers(s.shape, N, s.splitMode, s.manualSplit);
+  const k = windersOf(s);
+  if (s.shape === 'S') {
+    const sp = spiralParams(s, N, h, s.treadThickness);
+    const g = sp.theta * sp.walkRadius;
+    return {
+      totalRise: room.height, risers: N, rise: h, going: g, treadDepth: g + s.nosing, blondel: 2 * h + g,
+      angleDeg: (Math.atan2(h, g) * 180) / Math.PI, flights: [{ risers: N, treads: N - 1, length: (N - 1) * g }], landingHeight: null,
+      winders: 0, spiral: { radius: sp.radius, columnRadius: sp.columnRadius, walkRadius: sp.walkRadius, theta: sp.theta, sweep: sp.sweep, risersPerTurn: sp.risersPerTurn, treadWidth: sp.treadWidth },
+    };
+  }
+  const split = splitRisers(s.shape, N, s.splitMode, s.manualSplit, k);
   return {
     totalRise: room.height,
     risers: N,
@@ -38,12 +72,15 @@ export function computeCalc(room: RoomConfig, s: StairConfig): Calc {
     blondel: 2 * h + s.going,
     angleDeg: (Math.atan2(h, s.going) * 180) / Math.PI,
     flights: split.map((n) => ({ risers: n, treads: n - 1, length: (n - 1) * s.going })),
-    landingHeight: s.shape === 'I' ? null : split[0] * h,
+    landingHeight: s.shape === 'I' || k ? null : split[0] * h,
+    winders: k,
+    spiral: null,
   };
 }
 
 export interface AnalyticInput {
   shape: Shape;
+  winders?: number;
   split: number[];
   width: number;
   going: number;
@@ -56,6 +93,8 @@ export interface AnalyticInput {
 /** Rozmiar w układzie lokalnym bez generowania elementów: across = w poprzek (u), along = wzdłuż wejścia (v). */
 export function analyticSize(a: AnalyticInput): { across: number; along: number } {
   const L = a.split.map((n) => (n - 1) * a.going);
+  if (a.shape === 'S') return { across: a.width, along: a.width }; // width = średnica
+  if (a.winders && a.shape === 'L') return { across: a.width + L[1], along: L[0] + a.nosing + a.width };
   if (a.shape === 'I') return { across: a.width, along: L[0] + a.nosing };
   if (a.shape === 'L') {
     const lw = Math.max(a.landingWidth, a.width);

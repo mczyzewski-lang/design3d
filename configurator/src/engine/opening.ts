@@ -44,10 +44,51 @@ function setExitEdge(r: Rect, side: WallKey, layout: Layout): Rect {
 export function allSurfaces(layout: Layout): Array<{ rect: Rect; y: number }> {
   const s = layout.flights.flatMap((f) => f.treadEls.map((t) => ({ rect: t.rect, y: t.y })));
   if (layout.landing) s.push({ rect: layout.landing.rect, y: layout.landing.y });
+  if (layout.winder) s.push(...layout.winder.treads.map((t) => ({ rect: t.rect, y: t.y })));
+  if (layout.spiral) s.push(...layout.spiral.treads.map((t) => ({ rect: t.rect, y: t.y })));
   return s;
 }
 
+/** Schody kręcone: otwór kwadratowy wokół spirali; górny podest w ćwiartce przy wyjściu. */
+function spiralOpening(room: RoomConfig, stairs: StairConfig, layout: Layout): OpeningResult {
+  const sp = layout.spiral!;
+  const slab = slabExtent(room);
+  const c = sp.center;
+  const m = LIMITS.openingMargin;
+  const R = sp.radius;
+  const auto = clampRect({ minX: c.x - R - m, maxX: c.x + R + m, minZ: c.z - R - m, maxZ: c.z + R + m }, slab);
+  const rect = stairs.opening.mode === 'manual'
+    ? clampRect({ minX: c.x - stairs.opening.width / 2, maxX: c.x + stairs.opening.width / 2, minZ: c.z - stairs.opening.length / 2, maxZ: c.z + stairs.opening.length / 2 }, slab)
+    : auto;
+  const underside = room.height - room.slabThickness;
+  const platformUnder = room.height - LIMITS.platformThickness;
+  const interior: Rect = { minX: 0, maxX: room.width, minZ: 0, maxZ: room.depth };
+  let minHeadroom = Infinity;
+  const shortfalls: OpeningResult['headroomShortfalls'] = [];
+  const pr = sp.platform.rect;
+  for (const t of sp.treads) {
+    if (!rectInside(t.rect, interior)) continue;
+    // pod podestem (środek stopnia w ćwiartce podestu)
+    const mid = t.poly![Math.floor(t.poly!.length / 4)];
+    const cx = (mid.x + c.x) / 2;
+    const cz = (mid.z + c.z) / 2;
+    const underPlatform = cx > pr.minX && cx < pr.maxX && cz > pr.minZ && cz < pr.maxZ;
+    let hr = Infinity;
+    if (underPlatform) hr = platformUnder - t.y;
+    else if (!rectInside(t.rect, rect)) hr = underside - t.y;
+    if (hr < minHeadroom) minHeadroom = hr;
+    if (hr < LIMITS.headroom - 1e-6) shortfalls.push({ rect: t.rect, y: t.y, headroom: hr });
+  }
+  const side = exitSideOf(layout.exit.dir);
+  const len = Math.min(rect.maxX - rect.minX, rect.maxZ - rect.minZ);
+  return {
+    rect, autoRect: auto, exitSide: side, requiredLength: auto.maxZ - auto.minZ, length: rect.maxZ - rect.minZ, width: rect.maxX - rect.minX,
+    minHeadroom, headroomShortfalls: shortfalls, exitZone: pr, exitZoneDepth: Math.max(len, 1),
+  };
+}
+
 export function computeOpening(room: RoomConfig, stairs: StairConfig, layout: Layout): OpeningResult {
+  if (layout.spiral) return spiralOpening(room, stairs, layout);
   const underside = room.height - room.slabThickness;
   const side = exitSideOf(layout.exit.dir);
   const alongX = side === 'left' || side === 'right';

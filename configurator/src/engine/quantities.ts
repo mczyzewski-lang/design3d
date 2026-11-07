@@ -1,5 +1,5 @@
 // Zestawienie ilościowe (baza pod BOM) — BEZ cen.
-import { railingSpec, structureSpec, woodSpec } from './catalog';
+import { GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, railingSpec, structureSpec, woodSpec } from './catalog';
 import { pathLength } from './railingLayout';
 import type { Config, Solved } from './types';
 
@@ -10,6 +10,23 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 export function quantities(c: Config, s: Solved): QtyItem[] {
   const L = s.layout;
   const items: QtyItem[] = [];
+  const polyArea = (p: Array<{ x: number; z: number }>) => Math.abs(p.reduce((a, q, i) => { const r = p[(i + 1) % p.length]; return a + q.x * r.z - r.x * q.z; }, 0)) / 2;
+  if (L.spiral) {
+    const sp = L.spiral;
+    const t = c.stairs.treadThickness;
+    const area = sp.treads.reduce((a, tr) => a + polyArea(tr.poly!), 0);
+    const plat = (sp.platform.rect.maxX - sp.platform.rect.minX) * (sp.platform.rect.maxZ - sp.platform.rect.minZ);
+    items.push({ group: 'Drewno', name: `Stopnie klinowe (${woodSpec(c.treads.wood).label}, ${Math.round(t * 1000)} mm)`, qty: sp.treads.length, unit: 'szt.' });
+    items.push({ group: 'Drewno', name: 'Powierzchnia stopni', qty: r2(area), unit: 'm²' });
+    items.push({ group: 'Drewno', name: 'Górny podest', qty: r2(plat), unit: 'm²' });
+    items.push({ group: 'Stal', name: 'Kolumna centralna Ø120', qty: r2(c.room.height), unit: 'mb' });
+    items.push({ group: 'Stal', name: 'Tuleje dystansowe + wsporniki stopni', qty: sp.treads.length, unit: 'kpl.' });
+    items.push({ group: 'Stal', name: 'Płyty kotwiące (posadzka + strop)', qty: 2, unit: 'szt.' });
+    const railLen = s.rails.reduce((a, p) => a + pathLength(p.points), 0);
+    if (railLen) items.push({ group: 'Balustrada', name: `${railingSpec(c.railing.type).label} (spirala + otwór)`, qty: r2(railLen), unit: 'mb' });
+    if (c.lighting.led) items.push({ group: 'Oświetlenie', name: `Taśma LED ${c.lighting.ledTemp} K`, qty: r2(sp.treads.length * (sp.radius - sp.columnRadius)), unit: 'mb' });
+    return items;
+  }
   const treads = L.flights.reduce((a, f) => a + f.treads, 0);
   const treadArea = L.flights.reduce((a, f) => a + f.treads * f.width * (f.going + f.nosing), 0);
   const landingArea = L.landing ? (L.landing.rect.maxX - L.landing.rect.minX) * (L.landing.rect.maxZ - L.landing.rect.minZ) : 0;
@@ -18,6 +35,7 @@ export function quantities(c: Config, s: Solved): QtyItem[] {
   items.push({ group: 'Drewno', name: `Stopnice (${wood}, ${Math.round(t * 1000)} mm)`, qty: treads, unit: 'szt.' });
   items.push({ group: 'Drewno', name: 'Powierzchnia stopnic', qty: r2(treadArea), unit: 'm²' });
   if (L.landing) items.push({ group: 'Drewno', name: 'Okładzina spocznika', qty: r2(landingArea), unit: 'm²' });
+  if (L.winder) items.push({ group: 'Drewno', name: 'Stopnie zabiegowe', qty: L.winder.treads.length, unit: 'szt.' });
   items.push({ group: 'Drewno', name: 'Objętość drewna (stopnice + spocznik)', qty: Math.round((treadArea + landingArea) * t * 1000) / 1000, unit: 'm³' });
   const closed = c.structure.closedRisers && structureSpec(c.structure.type).closedRisersAllowed;
   if (closed) items.push({ group: 'Drewno', name: 'Podstopnice', qty: L.flights.reduce((a, f) => a + f.risers, 0), unit: 'szt.' });
@@ -48,12 +66,17 @@ export function quantities(c: Config, s: Solved): QtyItem[] {
   const railLen = balust.reduce((a, p) => a + pathLength(p.points), 0);
   if (railLen > 0) {
     items.push({ group: 'Balustrada', name: `${spec.label} — długość`, qty: r2(railLen), unit: 'mb' });
-    items.push({ group: 'Balustrada', name: `Pochwyt (${rc.handrailMaterial === 'wood' ? 'drewno' : 'stal'})`, qty: r2(railLen), unit: 'mb' });
+    if (rc.type !== 'glass') items.push({ group: 'Balustrada', name: `Pochwyt (${rc.handrailMaterial === 'wood' ? 'drewno' : 'stal'})`, qty: r2(railLen), unit: 'mb' });
     if (spec.hasSpacing && rc.type !== 'horizontalBars') items.push({ group: 'Balustrada', name: 'Elementy wypełnienia (pręty/płaskowniki)', qty: Math.ceil(railLen / rc.spacing), unit: 'szt.' });
     if (rc.type === 'horizontalBars') items.push({ group: 'Balustrada', name: 'Pręty poziome', qty: r2(railLen * Math.max(1, Math.floor((rc.height - 0.15) / rc.spacing))), unit: 'mb' });
     const area = railLen * (rc.height - 0.1);
     if (['perforated', 'mesh', 'solid'].includes(rc.type)) items.push({ group: 'Balustrada', name: 'Panele wypełnienia', qty: r2(area), unit: 'm²' });
-    if (rc.type === 'glass') items.push({ group: 'Balustrada', name: `Szkło VSG ${(rc.glassThickness * 1000).toFixed(1).replace('.', ',')} mm`, qty: r2(area), unit: 'm²' });
+    if (rc.type === 'glass') {
+      const tint = GLASS_TINTS.find((g) => g.key === rc.glassTint)!.label.toLowerCase();
+      items.push({ group: 'Balustrada', name: `Szkło VSG ${(rc.glassThickness * 1000).toFixed(1).replace('.', ',')} mm, ${tint}`, qty: r2(area), unit: 'm²' });
+      items.push({ group: 'Balustrada', name: `Mocowanie: ${GLASS_MOUNTS.find((g) => g.key === rc.glassMount)!.label.toLowerCase()}`, qty: r2(railLen), unit: 'mb' });
+      if (rc.glassTop !== 'none') items.push({ group: 'Balustrada', name: GLASS_TOPS.find((g) => g.key === rc.glassTop)!.label, qty: r2(railLen), unit: 'mb' });
+    }
   }
   const wallRail = s.rails.filter((p) => p.kind === 'wallHandrail');
   if (wallRail.length) {

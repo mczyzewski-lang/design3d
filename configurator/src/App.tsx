@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { TopBar, InfoBar, BottomBar } from './ui/Bars';
 import { Panel } from './ui/Panel';
-import { useView } from './store/store';
+import { useStore, useView } from './store/store';
+import { configFromHash } from './engine/share';
 
 // three.js / R3F w osobnym chunku
 const Scene = lazy(() => import('./three/Scene'));
@@ -27,6 +28,12 @@ function ProjectionFade() {
 }
 
 export default function App() {
+  // wklejony link z konfiguracją przy otwartej aplikacji
+  useEffect(() => {
+    const h = () => { const c = configFromHash(location.hash); if (c) useStore.getState().load(c); };
+    window.addEventListener('hashchange', h);
+    return () => window.removeEventListener('hashchange', h);
+  }, []);
   return (
     <div className="flex h-full flex-col">
       <TopBar />

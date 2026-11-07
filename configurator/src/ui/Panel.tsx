@@ -1,7 +1,7 @@
 // Prawy panel: karta analizy + zwijane sekcje 1–8.
 import { useMemo, useState } from 'react';
 import { ArrowRight, Braces } from 'lucide-react';
-import { ENTRY_LABEL, FINISHES, LANDING_SUPPORTS, RAILINGS, SHAPE_LABEL, STEEL_PRESETS, STRUCTURES, SUPPORT_TAG_LABEL, WALL_LABEL, WOODS, railingSpec, structureSpec } from '../engine/catalog';
+import { ENTRY_LABEL, FINISHES, GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, RISER_FINISHES, LANDING_SUPPORTS, RAILINGS, SHAPE_LABEL, STEEL_PRESETS, STRUCTURES, SUPPORT_TAG_LABEL, WALL_LABEL, WOODS, railingSpec, structureSpec } from '../engine/catalog';
 import { cm } from '../engine/validate';
 import { quantities } from '../engine/quantities';
 import type { EntryDir, SideMode, WallKey } from '../engine/types';
@@ -46,17 +46,32 @@ function TypeSection() {
   const s = c.stairs;
   return (
     <div>
-      <div className="grid grid-cols-3 gap-2">
-        {(['I', 'L', 'U'] as const).map((sh) => (
-          <Thumb key={sh} testId={`shape-${sh}`} active={s.shape === sh} onClick={() => setStairs({ shape: sh })} label={SHAPE_LABEL[sh].split(' (')[0]} sub={sh}>
+      <div className="grid grid-cols-4 gap-1.5">
+        {(['I', 'L', 'U', 'S'] as const).map((sh) => (
+          <Thumb key={sh} testId={`shape-${sh}`} active={s.shape === sh} onClick={() => setStairs(sh === 'S' ? { shape: sh, going: Math.min(s.going, 0.24) } : { shape: sh, winders: sh === 'U' ? Math.max(4, Math.min(7, s.winders * 2)) : sh === 'L' ? Math.min(4, Math.max(2, Math.round(s.winders / 2))) : s.winders })} label={SHAPE_LABEL[sh].split(' (')[0]} sub={sh === 'S' ? 'spiralne' : sh}>
             <ShapeThumb shape={sh} />
           </Thumb>
         ))}
       </div>
       {s.shape !== 'I' && (
-        <Field label={s.shape === 'L' ? 'Skręt' : 'Zawrót'}>
-          <Segmented value={s.turn} onChange={(v) => setStairs({ turn: v })} options={[{ value: 'left', label: 'W lewo' }, { value: 'right', label: 'W prawo' }]} />
+        <Field label={s.shape === 'L' ? 'Skręt' : s.shape === 'U' ? 'Zawrót' : 'Kierunek obrotu'}>
+          <Segmented value={s.turn} onChange={(v) => setStairs({ turn: v })} options={s.shape === 'S'
+            ? [{ value: 'left', label: 'Przeciwnie do wskazówek' }, { value: 'right', label: 'Zgodnie ze wskazówkami' }]
+            : [{ value: 'left', label: 'W lewo' }, { value: 'right', label: 'W prawo' }]} size={s.shape === 'S' ? 'sm' : 'md'} />
         </Field>
+      )}
+      {(s.shape === 'L' || s.shape === 'U') && (
+        <>
+          <Field label="Zakręt">
+            <Segmented value={s.turnType} onChange={(v) => setStairs({ turnType: v, winders: v === 'winders' ? (s.shape === 'L' ? 3 : 6) : s.winders })} options={[{ value: 'landing', label: 'Spocznik' }, { value: 'winders', label: 'Stopnie zabiegowe' }]} />
+          </Field>
+          {s.turnType === 'winders' && (
+            <SliderField label="Liczba stopni zabiegowych" value={s.winders} onChange={(v) => setStairs({ winders: Math.round(v) })} min={s.shape === 'L' ? 2 : 4} max={s.shape === 'L' ? 4 : 7} scale={1} unit="szt." />
+          )}
+        </>
+      )}
+      {s.shape === 'S' && (
+        <SliderField testId="f-diameter" label="Średnica schodów kręconych" value={s.spiralDiameter} onChange={(v) => setStairs({ spiralDiameter: v })} min={120} max={260} step={5} hint="Kolumna centralna Ø12 cm, górny podest w ćwiartce otworu." />
       )}
       <Field label="Kierunek wejścia">
         <Segmented value={s.entry} onChange={(v) => setStairs({ entry: v })} options={(['back', 'front', 'left', 'right'] as EntryDir[]).map((e) => ({
@@ -101,8 +116,17 @@ function DimensionsSection() {
         </div>
       </Field>
       <div className="mb-1 mt-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Schody</div>
-      <SliderField testId="f-runwidth" label="Szerokość biegu" value={s.width} onChange={(v) => setStairs({ width: v })} min={80} max={130} />
-      <SliderField testId="f-going" label="Głębokość stopnia (krok)" value={s.going} onChange={(v) => setStairs({ going: v })} min={22} max={34} step={0.5} />
+      {s.shape === 'S' ? (
+        <>
+          <SliderField testId="f-diameter2" label="Średnica" value={s.spiralDiameter} onChange={(v) => setStairs({ spiralDiameter: v })} min={120} max={260} step={5} />
+          <SliderField testId="f-going" label="Docelowy krok na linii chodu" value={s.going} onChange={(v) => setStairs({ going: v })} min={18} max={32} step={0.5} hint={`Faktyczny krok ${cm(solved.calc.going)} cm — kąt dobrany tak, by obrót kończył się na podeście (wielokrotność 90°).`} />
+        </>
+      ) : (
+        <>
+          <SliderField testId="f-runwidth" label="Szerokość biegu" value={s.width} onChange={(v) => setStairs({ width: v })} min={80} max={130} />
+          <SliderField testId="f-going" label="Głębokość stopnia (krok)" value={s.going} onChange={(v) => setStairs({ going: v })} min={22} max={34} step={0.5} />
+        </>
+      )}
       <SliderField label="Grubość stopnicy" value={s.treadThickness} onChange={(v) => setStairs({ treadThickness: v })} min={3} max={8} step={0.5} />
       <SliderField label="Nosek" value={s.nosing} onChange={(v) => setStairs({ nosing: v })} min={0} max={4} step={0.5} />
       <Field label="Liczba stopni">
@@ -113,14 +137,15 @@ function DimensionsSection() {
       ) : (
         <SliderField label="Liczba stopni" value={s.manualSteps} onChange={(v) => setStairs({ manualSteps: Math.round(v) })} min={s.shape === 'I' ? 2 : 4} max={34} scale={1} unit="szt." />
       )}
-      {s.shape !== 'I' && (
+      {(s.shape === 'L' || s.shape === 'U') && (
         <>
-          <Field label={`Podział stopni (${solved.calc.flights[0].risers} + ${solved.calc.flights[1].risers})`}>
+          <Field label={`Podział stopni (${solved.calc.flights[0].risers} + ${solved.calc.flights[1].risers}${solved.calc.winders ? ` + ${solved.calc.winders} zabiegowe` : ''})`}>
             <Segmented value={s.splitMode} onChange={(v) => setStairs({ splitMode: v, manualSplit: solved.calc.flights[0].risers })} options={[{ value: 'auto', label: 'Automatycznie' }, { value: 'manual', label: 'Ręcznie' }]} />
           </Field>
-          {s.splitMode === 'manual' && <SliderField label="Stopnie w biegu 1" value={s.manualSplit} onChange={(v) => setStairs({ manualSplit: Math.round(v) })} min={2} max={N - 2} scale={1} unit="szt." />}
-          <SliderField label="Głębokość spocznika" value={s.landingDepth} onChange={(v) => setStairs({ landingDepth: v })} min={60} max={200} hint={s.shape === 'L' ? 'Dla L co najmniej szerokość biegu.' : undefined} />
-          {s.shape === 'L' && <SliderField label="Szerokość spocznika (wzdłuż biegu 2)" value={s.landingWidth} onChange={(v) => setStairs({ landingWidth: v })} min={80} max={200} />}
+          {s.splitMode === 'manual' && <SliderField label="Stopnie w biegu 1" value={s.manualSplit} onChange={(v) => setStairs({ manualSplit: Math.round(v) })} min={2} max={N - 2 - solved.calc.winders} scale={1} unit="szt." />}
+          {s.turnType !== 'winders' && <SliderField label="Głębokość spocznika" value={s.landingDepth} onChange={(v) => setStairs({ landingDepth: v })} min={60} max={200} hint={s.shape === 'L' ? 'Dla L co najmniej szerokość biegu.' : undefined} />}
+          {s.shape === 'U' && s.turnType === 'winders' && <SliderField label="Głębokość zakrętu" value={s.landingDepth} onChange={(v) => setStairs({ landingDepth: v })} min={70} max={160} />}
+          {s.shape === 'L' && s.turnType !== 'winders' && <SliderField label="Szerokość spocznika (wzdłuż biegu 2)" value={s.landingWidth} onChange={(v) => setStairs({ landingWidth: v })} min={80} max={200} />}
           {s.shape === 'U' && <SliderField testId="f-gap" label="Odstęp między biegami" value={s.gap} onChange={(v) => setStairs({ gap: v })} min={6} max={80} />}
         </>
       )}
@@ -153,9 +178,14 @@ function StructureSection() {
           </Thumb>
         ))}
       </div>
-      <p className="mt-2 text-[11.5px] text-muted">{spec.description}</p>
-      {spec.closedRisersAllowed && <Toggle label="Zamknięte podstopnice" checked={st.closedRisers} onChange={(v) => setStructure({ closedRisers: v })} />}
-      {c.stairs.shape !== 'I' && (
+      <p className="mt-2 text-[11.5px] text-muted">{c.stairs.shape === 'S' ? 'Schody kręcone mają własną konstrukcję: kolumnę centralną Ø120 mm, stopnie na tulejach dystansowych i ramionach oraz górny podest. Wybór konstrukcji dotyczy schodów prostych i łamanych.' : spec.description}</p>
+      {(spec.closedRisersAllowed || c.stairs.turnType === 'winders') && c.stairs.shape !== 'S' && <Toggle label="Zamknięte podstopnice" checked={st.closedRisers} onChange={(v) => setStructure({ closedRisers: v })} />}
+      {st.closedRisers && c.stairs.shape !== 'S' && (
+        <Field label="Wykończenie podstopnic">
+          <Segmented value={st.riserFinish} onChange={(v) => setStructure({ riserFinish: v })} size="sm" options={RISER_FINISHES.map((r) => ({ value: r.key, label: r.label }))} />
+        </Field>
+      )}
+      {(c.stairs.shape === 'L' || c.stairs.shape === 'U') && c.stairs.turnType === 'landing' && (
         <Field label="Podparcie spocznika">
           <div className="grid grid-cols-2 gap-1">
             {LANDING_SUPPORTS.map((l) => (
@@ -200,6 +230,7 @@ function RailingSection() {
   const r = c.railing;
   const spec = railingSpec(r.type);
   const isI = c.stairs.shape === 'I';
+  const isS = c.stairs.shape === 'S';
   const sideOpts: Array<{ value: SideMode; label: string }> = [{ value: 'balustrade', label: 'Balustrada' }, { value: 'wallHandrail', label: 'Pochwyt przyścienny' }, { value: 'none', label: 'Brak' }];
   return (
     <div>
@@ -218,21 +249,43 @@ function RailingSection() {
         </>
       )}
       {r.type === 'glass' && (
-        <Field label="Grubość szkła VSG">
-          <Segmented value={r.glassThickness} onChange={(v) => setRailing({ glassThickness: v })} size="sm" options={[{ value: 0.0128, label: '12,8' }, { value: 0.0168, label: '16,8' }, { value: 0.0176, label: '17,5' }, { value: 0.0215, label: '21,5' }]} />
-        </Field>
+        <>
+          <Field label="Grubość szkła VSG (mm)">
+            <Segmented value={r.glassThickness} onChange={(v) => setRailing({ glassThickness: v })} size="sm" options={[{ value: 0.0128, label: '12,8' }, { value: 0.0168, label: '16,8' }, { value: 0.0176, label: '17,5' }, { value: 0.0215, label: '21,5' }]} />
+          </Field>
+          <Field label="Mocowanie szkła">
+            <div className="grid grid-cols-3 gap-1">
+              {GLASS_MOUNTS.map((g) => (
+                <button key={g.key} type="button" title={g.hint} data-testid={`glass-mount-${g.key}`} onClick={() => setRailing({ glassMount: g.key })} className={`rounded-md border px-1.5 py-1.5 text-[11px] leading-tight ${r.glassMount === g.key ? 'border-oak bg-oak-soft/60' : 'border-line'}`}>{g.label}</button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Rodzaj szkła">
+            <div className="flex flex-wrap gap-1.5">
+              {GLASS_TINTS.map((g) => (
+                <button key={g.key} type="button" data-testid={`glass-tint-${g.key}`} onClick={() => setRailing({ glassTint: g.key })} className={`flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] ${r.glassTint === g.key ? 'border-oak bg-oak-soft/60' : 'border-line'}`}>
+                  <span className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ background: g.color, opacity: Math.max(0.5, g.opacity + 0.4) }} />{g.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Wykończenie górnej krawędzi">
+            <Segmented value={r.glassTop} onChange={(v) => setRailing({ glassTop: v })} size="sm" options={GLASS_TOPS.map((g) => ({ value: g.key, label: g.label }))} />
+            {r.glassTop === 'woodCap' && <p className="mt-1 text-[11px] text-muted">Pochwyt z tego samego drewna co stopnice ({WOODS.find((w) => w.key === c.treads.wood)!.label.toLowerCase()}).</p>}
+          </Field>
+        </>
       )}
-      <Field label="Pochwyt">
+      {r.type !== 'glass' && <Field label="Pochwyt">
         <Segmented value={r.handrail} onChange={(v) => setRailing({ handrail: v })} options={[{ value: 'round', label: 'Okrągły' }, { value: 'rect', label: 'Prostokątny' }, { value: 'flat', label: 'Płaski' }]} />
         <div className="mt-1.5"><Segmented value={r.handrailMaterial} onChange={(v) => setRailing({ handrailMaterial: v })} options={[{ value: 'steel', label: 'Stal' }, { value: 'wood', label: 'Drewno (jak stopnice)' }]} /></div>
+      </Field>}
+      <Field label={isI ? 'Strona lewa' : isS ? 'Balustrada spiralna' : 'Strona zewnętrzna'}>
+        <Segmented value={r.outer} onChange={(v) => setRailing({ outer: v })} size="sm" options={isS ? sideOpts.filter((o) => o.value !== 'wallHandrail') : sideOpts} />
       </Field>
-      <Field label={isI ? 'Strona lewa' : 'Strona zewnętrzna'}>
-        <Segmented value={r.outer} onChange={(v) => setRailing({ outer: v })} size="sm" options={sideOpts} />
-      </Field>
-      <Field label={isI ? 'Strona prawa' : 'Strona wewnętrzna'}>
+      {!isS && <Field label={isI ? 'Strona prawa' : 'Strona wewnętrzna'}>
         <Segmented value={r.inner} onChange={(v) => setRailing({ inner: v })} size="sm" options={sideOpts} />
-      </Field>
-      {!isI && <Toggle label="Balustrada wokół spocznika" checked={r.landing} onChange={(v) => setRailing({ landing: v })} />}
+      </Field>}
+      {!isI && !isS && c.stairs.turnType === 'landing' && <Toggle label="Balustrada wokół spocznika" checked={r.landing} onChange={(v) => setRailing({ landing: v })} />}
       <Toggle label="Balustrada przy otworze w stropie" checked={r.opening} onChange={(v) => setRailing({ opening: v })} />
     </div>
   );
@@ -304,21 +357,26 @@ function SummarySection() {
     ['Kondygnacja', `${cm(c.room.height)} cm`],
     ['Pomieszczenie', `${cm(c.room.width)} × ${cm(c.room.depth)} cm`],
     ['Liczba stopni', `${s.calc.risers} × ${cm(s.calc.rise)} cm`],
-    ['Podział', s.calc.flights.map((f) => f.risers).join(' + ')],
-    ['Krok / głębokość stopnicy', `${cm(s.calc.going)} / ${cm(s.calc.treadDepth)} cm`],
+    ...(s.layout.spiral ? [
+      ['Średnica', `${cm(s.layout.spiral.radius * 2)} cm (stopień ${cm(s.calc.spiral!.treadWidth)} cm)`],
+      ['Obrót', `${Math.round((s.layout.spiral.sweep * 180) / Math.PI)}°, ${c.stairs.turn === 'right' ? 'zgodnie' : 'przeciwnie'} do ruchu wskazówek`],
+      ['Prześwit nad spiralą', `${cm(s.layout.spiral.selfHeadroom)} cm`],
+    ] as Array<[string, string]> : [['Podział', s.calc.flights.map((f) => f.risers).join(' + ') + (s.calc.winders ? ` + ${s.calc.winders} zabiegowe` : '')] as [string, string]]),
+    ...(s.layout.winder ? [['Stopnie zabiegowe', `${s.layout.winder.treads.length} szt., krok na linii chodu ${cm(s.layout.winder.walkGoing)} cm`] as [string, string]] : []),
+    [s.layout.spiral ? 'Krok na linii chodu / stopnica' : 'Krok / głębokość stopnicy', `${cm(s.calc.going)} / ${cm(s.calc.treadDepth)} cm`],
     ['2h + s', `${cm(s.calc.blondel)} cm`],
     ['Nachylenie', `${s.calc.angleDeg.toFixed(1).replace('.', ',')}°`],
-    ['Biegi', s.calc.flights.map((f, i) => `${i + 1}: ${f.treads} stopnic, ${cm(f.length)} cm`).join('; ')],
+    ...(s.layout.spiral ? [] : [['Biegi', s.calc.flights.map((f, i) => `${i + 1}: ${f.treads} stopnic, ${cm(f.length)} cm`).join('; ')] as [string, string]]),
     ...(s.calc.landingHeight !== null ? [['Spocznik', `na ${cm(s.calc.landingHeight)} cm, ${cm(s.layout.landing!.rect.maxX - s.layout.landing!.rect.minX)} × ${cm(s.layout.landing!.rect.maxZ - s.layout.landing!.rect.minZ)} cm`] as [string, string]] : []),
     ['Rzut całkowity', `${cm(fp.maxX - fp.minX)} × ${cm(fp.maxZ - fp.minZ)} cm`],
     ['Odstępy (L/P/T/P)', `${cm(s.fit.gaps.left)} / ${cm(s.fit.gaps.right)} / ${cm(s.fit.gaps.back)} / ${cm(s.fit.gaps.front)} cm`],
     ['Otwór w stropie', `${cm(s.opening.length)} × ${cm(s.opening.width)} cm`],
     ['Min. prześwit', Number.isFinite(s.opening.minHeadroom) ? `${cm(s.opening.minHeadroom)} cm` : '—'],
     ['Wyjście na piętro', s.exitDirLabel],
-    ['Konstrukcja', `${structureSpec(c.structure.type).label}${c.stairs.shape !== 'I' ? `, spocznik: ${LANDING_SUPPORTS.find((l) => l.key === c.structure.landingSupport)!.label.toLowerCase()}` : ''}`],
+    ['Konstrukcja', s.layout.spiral ? 'Kolumna centralna Ø120 mm, stopnie na tulejach' : `${structureSpec(c.structure.type).label}${s.layout.landing ? `, spocznik: ${LANDING_SUPPORTS.find((l) => l.key === c.structure.landingSupport)!.label.toLowerCase()}` : ''}${c.structure.closedRisers ? `, podstopnice: ${RISER_FINISHES.find((r) => r.key === c.structure.riserFinish)!.label.toLowerCase()}` : ''}`],
     ['Stopnice', WOODS.find((w) => w.key === c.treads.wood)!.label],
     ['Stal', `${STEEL_PRESETS.find((p) => p.key === c.steel.preset)?.label ?? c.steel.color}, ${FINISHES.find((f) => f.key === c.steel.finish)!.label.toLowerCase()}`],
-    ['Balustrada', `${railingSpec(c.railing.type).label}, ${cm(c.railing.height)} cm`],
+    ['Balustrada', `${railingSpec(c.railing.type).label}, ${cm(c.railing.height)} cm${c.railing.type === 'glass' ? ` — ${GLASS_TINTS.find((g) => g.key === c.railing.glassTint)!.label.toLowerCase()}, ${GLASS_MOUNTS.find((g) => g.key === c.railing.glassMount)!.label.toLowerCase()}, ${GLASS_TOPS.find((g) => g.key === c.railing.glassTop)!.label.toLowerCase()}` : ''}`],
   ];
   return (
     <div data-testid="summary">

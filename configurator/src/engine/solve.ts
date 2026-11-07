@@ -9,7 +9,7 @@ export function solveKey(c: Config): string {
   const r = c.railing;
   return JSON.stringify([
     c.room, c.stairs, c.structure.type, c.structure.landingSupport,
-    r.type, r.height, r.profile, r.spacing, r.outer, r.inner, r.landing, r.opening, r.glassThickness,
+    r.type, r.height, r.profile, r.spacing, r.outer, r.inner, r.landing, r.opening, r.glassThickness, r.glassMount, r.glassTop,
   ]);
 }
 

@@ -81,12 +81,16 @@ function splitByLanding(points: LocalPolyPoint[], seg: [number, number] | null, 
 }
 
 export function buildRailPaths(room: RoomConfig, layout: Layout, opening: OpeningResult, rc: RailingConfig): RailPath[] {
+  if (layout.spiral) return spiralRails(room, layout, opening, rc);
   const paths: RailPath[] = [];
   const sides: Array<['outer' | 'inner', typeof rc.outer]> = [['outer', rc.outer], ['inner', rc.inner]];
   for (const [side, mode] of sides) {
     if (mode === 'none') continue;
     const e = side === 'outer' ? layout.edges.outer : layout.edges.inner;
-    const parts = side === 'outer' ? splitByLanding(e.points, layout.edges.outer.landingSeg, rc.landing || mode === 'wallHandrail') : [e.points];
+    const brk = layout.edges.inner.breakAt;
+    const parts = side === 'outer'
+      ? splitByLanding(e.points, layout.edges.outer.landingSeg, rc.landing || mode === 'wallHandrail')
+      : brk ? [e.points.slice(0, brk), e.points.slice(brk)].filter((q) => q.length >= 2) : [e.points];
     parts.forEach((pts, pi) => {
       if (mode === 'balustrade') {
         const off = offsetPolyline(pts, e.interior, pts.slice(1).map(() => LIMITS.railOffset));
@@ -171,7 +175,11 @@ export function openingRails(room: RoomConfig, layout: Layout, opening: OpeningR
     if (emax - hi > 0.15) parts.push([hi, emax]);
     for (const [p0, p1] of parts) segs.push(ea < eb ? [mk(p0), mk(p1)] : [mk(p1), mk(p0)]);
   }
-  // łączenie kolejnych odcinków w polilinie
+  return joinSegments(segs).map((l, i) => ({ id: `opening-${i}`, kind: 'balustrade', scope: 'opening', side: 'opening', points: l.map((p) => ({ x: p.x, y, z: p.z })) }));
+}
+
+/** Łączy kolejne odcinki (stykające się końcami) w polilinie, także zamykając pętlę. */
+export function joinSegments(segs: Array<[Vec2, Vec2]>): Vec2[][] {
   const lines: Vec2[][] = [];
   for (const [a, b] of segs) {
     const last = lines[lines.length - 1];
@@ -184,7 +192,63 @@ export function openingRails(room: RoomConfig, layout: Layout, opening: OpeningR
     const le = last[last.length - 1];
     if (Math.hypot(le.x - first[0].x, le.z - first[0].z) < 1e-6) { lines[0] = [...last, ...first.slice(1)]; lines.pop(); }
   }
-  return lines.map((l, i) => ({ id: `opening-${i}`, kind: 'balustrade', scope: 'opening', side: 'opening', points: l.map((p) => ({ x: p.x, y, z: p.z })) }));
+  return lines;
+}
+
+/** Schody kręcone: balustrada po helisie na zewnętrznym promieniu + balustrada otworu (bez ćwiartki podestu i krawędzi wyjścia). */
+export function spiralRails(room: RoomConfig, layout: Layout, opening: OpeningResult, rc: RailingConfig): RailPath[] {
+  const sp = layout.spiral!;
+  const c = sp.center;
+  const out: RailPath[] = [];
+  const nT = sp.treads.length;
+  const h = room.height / (nT + 1);
+  if (rc.outer !== 'none') {
+    const r = sp.radius + LIMITS.railOffset;
+    const pts: Vec3[] = [];
+    const steps = nT * 2;
+    for (let i = 0; i <= steps; i++) {
+      const p = (i / steps) * nT;
+      const a = sp.phi0 + sp.sense * p * sp.theta;
+      pts.push({ x: c.x + r * Math.cos(a), y: h + p * h, z: c.z + r * Math.sin(a) });
+    }
+    out.push({ id: 'spiral-outer', kind: 'balustrade', scope: 'stair', side: 'outer', points: pts, smooth: true });
+  }
+  if (!rc.opening) return out;
+  const d = LIMITS.railOffset;
+  const o = opening.rect;
+  const R: Rect = { minX: o.minX - d, maxX: o.maxX + d, minZ: o.minZ - d, maxZ: o.maxZ + d };
+  const pr = sp.platform.rect;
+  const qx = Math.sign((pr.minX + pr.maxX) / 2 - c.x);
+  const qz = Math.sign((pr.minZ + pr.maxZ) / 2 - c.z);
+  const adj = LIMITS.wallAdjacent;
+  const near = (side: WallKey) => (side === 'back' ? room.walls.back && o.minZ <= adj : side === 'front' ? room.walls.front && room.depth - o.maxZ <= adj : side === 'left' ? room.walls.left && o.minX <= adj : room.walls.right && room.width - o.maxX <= adj);
+  const sides: Array<{ side: WallKey; a: Vec2; b: Vec2 }> = [
+    { side: 'back', a: { x: R.minX, z: R.minZ }, b: { x: R.maxX, z: R.minZ } },
+    { side: 'right', a: { x: R.maxX, z: R.minZ }, b: { x: R.maxX, z: R.maxZ } },
+    { side: 'front', a: { x: R.maxX, z: R.maxZ }, b: { x: R.minX, z: R.maxZ } },
+    { side: 'left', a: { x: R.minX, z: R.maxZ }, b: { x: R.minX, z: R.minZ } },
+  ];
+  const segs: Array<[Vec2, Vec2]> = [];
+  for (const sd of sides) {
+    if (near(sd.side)) continue;
+    const mid = sd.side === 'back' || sd.side === 'front' ? { x: c.x, z: sd.a.z } : { x: sd.a.x, z: c.z };
+    for (const [a, b] of [[sd.a, mid], [mid, sd.b]] as Array<[Vec2, Vec2]>) {
+      const mx = Math.sign((a.x + b.x) / 2 - c.x) || Math.sign(a.x - c.x);
+      const mz = Math.sign((a.z + b.z) / 2 - c.z) || Math.sign(a.z - c.z);
+      if (mx === qx && mz === qz) continue; // krawędź przy podeście — przejście na strop
+      segs.push([a, b]);
+    }
+  }
+  const y = room.height;
+  joinSegments(segs).forEach((l, i) => out.push({ id: `opening-${i}`, kind: 'balustrade', scope: 'opening', side: 'opening', points: l.map((p) => ({ x: p.x, y, z: p.z })) }));
+  // krawędź podestu od strony otworu (promień e2)
+  const e2 = layout.exit.dir;
+  const rEnd = Math.min(o.maxX - c.x, c.x - o.minX, o.maxZ - c.z, c.z - o.minZ) + d;
+  out.push({
+    id: 'platform-edge', kind: 'balustrade', scope: 'opening', side: 'opening',
+    points: [{ x: c.x + e2.x * (sp.columnRadius + 0.03) - 0, y, z: c.z + e2.z * (sp.columnRadius + 0.03) }, { x: c.x + e2.x * rEnd, y, z: c.z + e2.z * rEnd }],
+  });
+  return out;
 }
 
 export function pathLength(p: Vec3[]): number {

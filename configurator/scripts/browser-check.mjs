@@ -73,6 +73,43 @@ await page.click('text=Dark Luxury');
 await wait(1000);
 await shot('41-kolekcja-dark-luxury');
 
+// nowe kształty i opcje
+await page.click('text=Typ schodów');
+await page.click('[data-testid="shape-S"]');
+await wait(1200);
+console.log('spirala:', await page.textContent('[data-testid="status-pill"]'));
+await shot('60-spirala');
+await page.click('[data-testid="autofit"]');
+await wait(1200);
+console.log('spirala po auto-dopasowaniu:', (await page.textContent('[data-testid="autofit-result"]')).trim());
+await shot('61-spirala-dopasowana');
+await page.click('[data-testid="cam-top"]');
+await wait(1300);
+await shot('62-spirala-z-gory');
+await page.click('[data-testid="cam-persp"]');
+await page.click('[data-testid="shape-L"]');
+await page.click('text="Stopnie zabiegowe"');
+await wait(1200);
+await shot('63-L-zabiegowe');
+await page.click('[data-testid="shape-U"]');
+await wait(1200);
+await shot('64-U-zabiegowe');
+await page.click('text="Spocznik"');
+await page.click('text=Balustrady');
+await page.click('[data-testid="railing-glass"]');
+for (const m of ['point', 'channel', 'clamps']) {
+  await page.click(`[data-testid="glass-mount-${m}"]`);
+  await wait(700);
+  await shot(`65-szklo-${m}`);
+}
+await page.click('[data-testid="glass-tint-frosted"]');
+await wait(600);
+await shot('66-szklo-satynowe');
+await page.click('[data-testid="glass-tint-extraClear"]');
+await page.click('[data-testid="share"]');
+await wait(400);
+console.log('link:', page.url().includes('#c=') ? 'w adresie' : 'BRAK');
+
 // wąski ekran
 await page.setViewportSize({ width: 420, height: 900 });
 await wait(1200);

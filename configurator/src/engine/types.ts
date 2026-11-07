@@ -1,6 +1,12 @@
 // Konfiguracja i wyniki — wszystkie długości w METRACH (UI pokazuje centymetry).
 
-export type Shape = 'I' | 'L' | 'U';
+/** I proste, L łamane 90°, U łamane 180°, S kręcone (spiralne) */
+export type Shape = 'I' | 'L' | 'U' | 'S';
+export type TurnType = 'landing' | 'winders';
+export type GlassMount = 'point' | 'channel' | 'clamps';
+export type GlassTint = 'clear' | 'extraClear' | 'frosted' | 'grey' | 'bronze';
+export type GlassTop = 'none' | 'steelCap' | 'woodCap';
+export type RiserFinish = 'wood' | 'white' | 'steel';
 export type Turn = 'left' | 'right';
 /** Kierunek marszu przy wejściu na schody (świat: tył = −Z, przód = +Z, lewo = −X, prawo = +X). */
 export type EntryDir = 'back' | 'front' | 'left' | 'right';
@@ -33,7 +39,14 @@ export interface OpeningConfig {
 
 export interface StairConfig {
   shape: Shape;
+  /** L/U: kierunek skrętu; S: kierunek obrotu (prawo = zgodnie z ruchem wskazówek zegara, patrząc z góry) */
   turn: Turn;
+  /** L/U: spocznik albo stopnie zabiegowe */
+  turnType: TurnType;
+  /** liczba stopni zabiegowych w zakręcie (L: 2–4, U: 4–7) */
+  winders: number;
+  /** S: średnica schodów kręconych */
+  spiralDiameter: number;
   width: number; // szerokość biegu
   going: number; // głębokość stopnia (krok)
   treadThickness: number;
@@ -60,6 +73,7 @@ export interface StructureConfig {
   type: StructureType;
   landingSupport: LandingSupport;
   closedRisers: boolean;
+  riserFinish: RiserFinish;
 }
 
 export interface TreadConfig {
@@ -85,6 +99,9 @@ export interface RailingConfig {
   landing: boolean;
   opening: boolean;
   glassThickness: number;
+  glassMount: GlassMount;
+  glassTint: GlassTint;
+  glassTop: GlassTop;
   separateColor: boolean;
   color: string;
 }
@@ -124,6 +141,9 @@ export interface Calc {
   angleDeg: number;
   flights: Array<{ risers: number; treads: number; length: number }>;
   landingHeight: number | null;
+  /** stopnie zabiegowe w zakręcie (0 = spocznik) */
+  winders: number;
+  spiral: null | { radius: number; columnRadius: number; walkRadius: number; theta: number; sweep: number; risersPerTurn: number; treadWidth: number };
 }
 
 /** Przekształcenie układu lokalnego schodów (u = prawa ręka, v = kierunek wejścia) do świata. */
@@ -132,8 +152,39 @@ export interface Xf { ox: number; oz: number; rx: number; rz: number; fx: number
 export interface TreadEl {
   flight: number;
   index: number; // 1..n-1
-  rect: Rect; // świat (z noskiem)
+  rect: Rect; // świat (z noskiem); dla wielokątów — prostokąt otaczający
   y: number; // górna powierzchnia
+  /** stopnie zabiegowe / klinowe: obrys w rzucie (świat) */
+  poly?: Vec2[];
+}
+
+export interface SpiralEl {
+  center: Vec2;
+  radius: number; // zewnętrzny
+  columnRadius: number;
+  walkRadius: number; // linia chodu
+  phi0: number; // kąt początkowy (rad, w płaszczyźnie x–z, od +x w stronę +z)
+  sense: 1 | -1; // +1 = zgodnie z ruchem wskazówek zegara (z góry)
+  theta: number; // kąt stopnia
+  sweep: number; // kąt całkowity (wielokrotność 90°)
+  treads: TreadEl[];
+  /** górny podest (ćwiartka kwadratu otworu) na poziomie stropu */
+  platform: { rect: Rect; y: number; poly: Vec2[] };
+  /** minimalny prześwit spirali nad samą sobą */
+  selfHeadroom: number;
+}
+
+export interface WinderEl {
+  /** punkt, wokół którego zbiegają się stopnie zabiegowe */
+  pivot: Vec2;
+  /** narożnik zewnętrzny (pod słup) */
+  outerCorners: Vec2[];
+  treads: TreadEl[];
+  baseY: number;
+  topY: number;
+  /** długość stopnia na linii chodu */
+  walkGoing: number;
+  minInnerGoing: number;
 }
 
 export interface FlightEl {
@@ -174,6 +225,8 @@ export interface Layout {
   xf: Xf;
   flights: FlightEl[];
   landing: LandingEl | null;
+  winder: WinderEl | null;
+  spiral: SpiralEl | null;
   structureRect: Rect; // rzut konstrukcji + stopnic
   footprint: Rect; // rzut całkowity z balustradami
   localSize: { across: number; along: number };
@@ -182,7 +235,7 @@ export interface Layout {
   /** krawędzie boczne w układzie lokalnym (dla balustrad); interior: strona wnętrza schodów patrząc wzdłuż ścieżki */
   edges: {
     outer: { points: LocalPolyPoint[]; interior: 'left' | 'right'; landingSeg: [number, number] | null };
-    inner: { points: LocalPolyPoint[]; interior: 'left' | 'right' };
+    inner: { points: LocalPolyPoint[]; interior: 'left' | 'right'; breakAt?: number };
   };
   mirrored: boolean;
 }
@@ -232,6 +285,8 @@ export interface RailPath {
   scope: 'stair' | 'landing' | 'opening';
   side: 'outer' | 'inner' | 'opening';
   points: Vec3[]; // linia bazowa (poziom chodzenia), świat
+  /** gładka krzywa (helisa) — słupki rzadziej niż w wierzchołkach */
+  smooth?: boolean;
   /** pochwyt przyścienny: segmenty bez ściany */
   noWall?: boolean;
   wallBrackets?: Array<{ at: Vec3; to: Vec3 }>;

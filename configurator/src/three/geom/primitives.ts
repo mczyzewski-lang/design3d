@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
-export type MatKey = 'steel' | 'wood' | 'led' | 'railSteel' | 'railWood' | 'glass' | 'glassEdge' | 'perforated' | 'mesh';
+export type MatKey = 'steel' | 'wood' | 'riser' | 'led' | 'railSteel' | 'railWood' | 'glass' | 'glassEdge' | 'perforated' | 'mesh';
 
 /** Zbiera geometrie per materiał; na końcu scala w jedną siatkę na materiał. */
 export class Parts {
@@ -212,4 +212,24 @@ export function quadPlane(p: THREE.Vector3[]): THREE.BufferGeometry {
 export function seeded(i: number): number {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
+}
+
+/**
+ * Wyciąga wielokąt zdefiniowany w rzucie (x, z) w pionie od y0 do y1.
+ * Kształt (X, Y) → świat (x, z); ekstruzja Z → −y; obrót wokół X o +90° (wyznacznik +1).
+ */
+export function extrudePlan(poly: Array<{ x: number; z: number }>, y0: number, y1: number, uvOff: [number, number] = [0, 0]): THREE.BufferGeometry {
+  let area = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    area += a.x * b.z - b.x * a.z;
+  }
+  const pts = area < 0 ? [...poly].reverse() : poly;
+  const shape = new THREE.Shape(pts.map((p) => new THREE.Vector2(p.x, p.z)));
+  const g = new THREE.ExtrudeGeometry(shape, { depth: Math.max(1e-4, y1 - y0), bevelEnabled: false, steps: 1, curveSegments: 1 });
+  // (X, Y, Z) → (X, −Z, Y): obrót o +90° wokół X
+  g.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1));
+  g.translate(0, y1, 0);
+  return meterUV(g, uvOff[0], uvOff[1]);
 }

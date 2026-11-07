@@ -1,5 +1,5 @@
 // Katalog: drewno, stal, konstrukcje, balustrady, limity ergonomiczne.
-import type { LandingSupport, RailingType, SteelFinish, StructureType, WoodKey } from './types';
+import type { GlassMount, GlassTint, GlassTop, LandingSupport, RailingType, RiserFinish, SteelFinish, StructureType, WoodKey } from './types';
 
 export const LIMITS = {
   riserMin: 0.15,
@@ -25,6 +25,19 @@ export const LIMITS = {
   openingMargin: 0.05,
   slabExtension: 1.4, // strop poza pokojem przy brakującej ścianie
   wallAdjacent: 0.15,
+  // schody kręcone (odniesienie ergonomiczne na linii chodu)
+  spiralMinDiameter: 1.2,
+  spiralMaxDiameter: 2.6,
+  spiralColumnRadius: 0.06,
+  spiralWalkFactor: 0.55, // linia chodu: kolumna + 55% szerokości stopnia
+  spiralGoingWarn: 0.22,
+  spiralGoingMin: 0.18,
+  spiralTreadWidthWarn: 0.65,
+  spiralSelfHeadroom: 2.0,
+  platformThickness: 0.06,
+  // stopnie zabiegowe
+  winderGoingWarn: 0.2,
+  winderInnerMin: 0.1,
 };
 
 export interface WoodSpec { key: WoodKey; label: string; base: string; dark: string; light: string; rays: boolean; contrast: number }
@@ -96,8 +109,34 @@ export const RAILINGS: RailingSpec[] = [
 
 export const ENTRY_LABEL: Record<string, string> = { back: 'do tyłu', front: 'do przodu', left: 'w lewo', right: 'w prawo' };
 export const WALL_LABEL: Record<string, string> = { back: 'tylna', front: 'przednia', left: 'lewa', right: 'prawa' };
-export const SHAPE_LABEL: Record<string, string> = { I: 'Proste (I)', L: 'Zabiegowe 90° (L)', U: 'Zawrotne 180° (U)' };
+export const SHAPE_LABEL: Record<string, string> = { I: 'Proste (I)', L: 'Łamane 90° (L)', U: 'Łamane 180° (U)', S: 'Kręcone (spiralne)' };
 
 export const woodSpec = (k: WoodKey) => WOODS.find((w) => w.key === k) ?? WOODS[0];
 export const structureSpec = (k: StructureType) => STRUCTURES.find((s) => s.key === k) ?? STRUCTURES[0];
 export const railingSpec = (k: RailingType) => RAILINGS.find((r) => r.key === k) ?? RAILINGS[0];
+
+export const GLASS_MOUNTS: Array<{ key: GlassMount; label: string; hint: string }> = [
+  { key: 'point', label: 'Uchwyty punktowe', hint: 'Tafle na rozetach mocowanych do boku konstrukcji, bez słupków.' },
+  { key: 'channel', label: 'Listwa dolna (profil U)', hint: 'Szkło osadzone w ciągłym profilu aluminiowo-stalowym.' },
+  { key: 'clamps', label: 'Zaciski między słupkami', hint: 'Tafle w zaciskach na słupkach stalowych.' },
+];
+
+export const GLASS_TINTS: Array<{ key: GlassTint; label: string; color: string; opacity: number; roughness: number; edge: string }> = [
+  { key: 'clear', label: 'Bezbarwne', color: '#d9efe9', opacity: 0.22, roughness: 0.04, edge: '#4f9c84' },
+  { key: 'extraClear', label: 'Extra clear (niskożelazowe)', color: '#f2f8f8', opacity: 0.16, roughness: 0.03, edge: '#a9cfc6' },
+  { key: 'frosted', label: 'Satynowe (mleczne)', color: '#f4f6f5', opacity: 0.72, roughness: 0.6, edge: '#cfdcd8' },
+  { key: 'grey', label: 'Grafitowe', color: '#5d6266', opacity: 0.45, roughness: 0.05, edge: '#3d4447' },
+  { key: 'bronze', label: 'Brązowe', color: '#8a6d4f', opacity: 0.42, roughness: 0.05, edge: '#5e4935' },
+];
+
+export const GLASS_TOPS: Array<{ key: GlassTop; label: string }> = [
+  { key: 'woodCap', label: 'Drewniany pochwyt na szkle' },
+  { key: 'steelCap', label: 'Nakładka stalowa' },
+  { key: 'none', label: 'Bez pochwytu' },
+];
+
+export const RISER_FINISHES: Array<{ key: RiserFinish; label: string }> = [
+  { key: 'wood', label: 'Drewno jak stopnice' },
+  { key: 'white', label: 'Biała lakierowana' },
+  { key: 'steel', label: 'W kolorze stali' },
+];
