@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Lead Discovery · design3d.pl</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand"><span class="logo">d3</span><div><strong>design3d.pl</strong><small>Panel administracyjny</small></div></div>
+      <nav>
+        <div class="nav-section">Lead Discovery</div>
+        <a href="#/dashboard" data-nav="dashboard">Pulpit</a>
+        <a href="#/projects" data-nav="projects">Projekty wyszukiwania</a>
+        <a href="#/companies" data-nav="companies">Firmy</a>
+        <a href="#/jobs" data-nav="jobs">Zadania i błędy</a>
+        <a href="#/privacy" data-nav="privacy">Prywatność / RODO</a>
+      </nav>
+      <div class="sidebar-foot" id="sysinfo"></div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <h1 id="page-title">Lead Discovery</h1>
+        <div class="topbar-right">
+          <label class="scope">Projekt:
+            <select id="scope"><option value="">Wszystkie</option></select>
+          </label>
+          <a class="btn primary" href="#/projects/new">+ Nowy projekt wyszukiwania</a>
+        </div>
+      </header>
+      <section id="view" class="view"></section>
+    </main>
+  </div>
+  <div id="drawer" class="drawer" hidden>
+    <div class="drawer-backdrop" data-close></div>
+    <div class="drawer-panel" role="dialog" aria-modal="true"><div id="drawer-body"></div></div>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
