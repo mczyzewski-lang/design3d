@@ -309,3 +309,41 @@ describe('style stopni', () => {
     expect(legacy.meta.tags.riser).toBe(20);
   });
 });
+
+describe('konstrukcje drewniana i betonowa', () => {
+  test('policzki drewniane: belki i listwy z drewna, bez stalowych kątowników', () => {
+    const c = cfg((x) => { x.structure.type = 'woodStringers'; });
+    const g = buildStairGeometry(c, solve(c));
+    expect(g.meta.tags.woodStringer).toBeGreaterThanOrEqual(4); // 2 biegi × 2 policzki
+    expect(g.meta.tags.cleat).toBe(18 * 2);
+    expect(g.meta.tags.angle ?? 0).toBe(0);
+    expect(g.meta.tags.rib ?? 0).toBe(0);
+    expect(g.meta.tags.landingFrame).toBeGreaterThan(0);
+  });
+  test('płyta żelbetowa: beton pod biegami i spocznikiem, bez ramy stalowej', () => {
+    const c = cfg((x) => { x.structure.type = 'concrete'; x.structure.landingSupport = 'fourPosts'; });
+    const g = buildStairGeometry(c, solve(c));
+    expect(g.geoms.concrete).toBeDefined();
+    expect(g.meta.tags.concreteSlab).toBe(2);
+    expect(g.meta.tags.landingSlab).toBe(1);
+    expect(g.meta.tags.landingFrame ?? 0).toBe(0);
+    expect(g.meta.tags.landingPost).toBe(4);
+    expect(g.meta.tags.anchorPlate ?? 0).toBe(0);
+    // stopnice leżą na betonie: górna krawędź płyty pod stopnicą
+    const bb = g.geoms.concrete!.boundingBox ?? (g.geoms.concrete!.computeBoundingBox(), g.geoms.concrete!.boundingBox!);
+    expect(bb.max.y).toBeLessThanOrEqual(c.room.height - c.stairs.treadThickness + 1e-6);
+  });
+  test('beton ze stopniami zabiegowymi i wszystkie 7 konstrukcji dają różną geometrię', () => {
+    const c = cfg((x) => { x.structure.type = 'concrete'; x.stairs.turnType = 'winders'; });
+    const g = buildStairGeometry(c, solve(c));
+    expect(g.meta.tags.concreteWinder).toBeGreaterThan(0);
+    expect(g.meta.tags.winderPost ?? 0).toBe(0);
+    const all: StructureType[] = [...STRUCTS, 'woodStringers', 'concrete'];
+    const sig = all.map((t) => {
+      const k = cfg((x) => { x.structure.type = t; });
+      const r = buildStairGeometry(k, solve(k));
+      return `${vcount(r.geoms.steel)}:${vcount(r.geoms.wood)}:${vcount(r.geoms.concrete)}`;
+    });
+    expect(new Set(sig).size).toBe(7);
+  });
+});

@@ -280,6 +280,12 @@ export function rectToWorld(xf: Xf, u0: number, u1: number, v0: number, v1: numb
   return { minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z) };
 }
 
+/** Odstępy od ścian (lewa/prawa mogą być ustawione osobno). */
+export function wallGaps(s: Pick<StairConfig, 'wallGap' | 'wallGapSplit' | 'wallGapLeft' | 'wallGapRight'>): Record<'left' | 'right' | 'back' | 'front', number> {
+  const g = s.wallGap;
+  return s.wallGapSplit ? { left: s.wallGapLeft ?? g, right: s.wallGapRight ?? g, back: g, front: g } : { left: g, right: g, back: g, front: g };
+}
+
 /** Rozmieszczenie: wyrównanie rzutu całkowitego wg ustawień i odstępu od ścian. */
 export function placeLocal(room: RoomConfig, s: StairConfig, local: LocalStair): Xf {
   const { f, r } = ENTRY_VECTORS[s.entry];
@@ -287,18 +293,18 @@ export function placeLocal(room: RoomConfig, s: StairConfig, local: LocalStair):
   const fp = rectToWorld(base, local.uMin - local.margin.uMin, local.uMax + local.margin.uMax, local.vMin, local.vMax + local.margin.vMax);
   const wFp = fp.maxX - fp.minX;
   const dFp = fp.maxZ - fp.minZ;
-  const gap = s.wallGap;
+  const g = wallGaps(s);
   let minX: number;
   switch (s.alignX) {
-    case 'left': minX = gap; break;
-    case 'right': minX = room.width - gap - wFp; break;
+    case 'left': minX = g.left; break;
+    case 'right': minX = room.width - g.right - wFp; break;
     case 'manual': minX = s.manualX; break;
-    default: minX = (room.width - wFp) / 2;
+    default: minX = g.left + (room.width - g.left - g.right - wFp) / 2;
   }
   let minZ: number;
   switch (s.alignZ) {
-    case 'back': minZ = gap; break;
-    case 'front': minZ = room.depth - gap - dFp; break;
+    case 'back': minZ = g.back; break;
+    case 'front': minZ = room.depth - g.front - dFp; break;
     case 'manual': minZ = s.manualZ; break;
     default: minZ = (room.depth - dFp) / 2;
   }
@@ -383,9 +389,9 @@ export function buildSpiralLayout(room: RoomConfig, s: StairConfig, calc: Calc, 
   const R = sp.radius;
   const m = outerRail ? LIMITS.railMargin : 0;
   const size = 2 * R + 2 * m;
-  const gap = s.wallGap;
-  const minX = s.alignX === 'left' ? gap : s.alignX === 'right' ? room.width - gap - size : s.alignX === 'manual' ? s.manualX : (room.width - size) / 2;
-  const minZ = s.alignZ === 'back' ? gap : s.alignZ === 'front' ? room.depth - gap - size : s.alignZ === 'manual' ? s.manualZ : (room.depth - size) / 2;
+  const g = wallGaps(s);
+  const minX = s.alignX === 'left' ? g.left : s.alignX === 'right' ? room.width - g.right - size : s.alignX === 'manual' ? s.manualX : g.left + (room.width - g.left - g.right - size) / 2;
+  const minZ = s.alignZ === 'back' ? g.back : s.alignZ === 'front' ? room.depth - g.front - size : s.alignZ === 'manual' ? s.manualZ : (room.depth - size) / 2;
   const c: Vec2 = { x: minX + m + R, z: minZ + m + R };
   const { f, r } = ENTRY_VECTORS[s.entry];
   const sense: 1 | -1 = s.turn === 'left' ? -1 : 1;

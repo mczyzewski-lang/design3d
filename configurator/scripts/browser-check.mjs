@@ -31,8 +31,8 @@ for (const [cam, name] of [['top', '02-z-gory'], ['side', '03-z-boku'], ['sectio
   await shot(name);
 }
 
-await page.click('text=Konstrukcja stalowa');
-for (const s of ['centralBeam', 'sideStringers', 'zigzag', 'bentPlate', 'weldedFrame']) {
+await page.click('text=Konstrukcja');
+for (const s of ['centralBeam', 'sideStringers', 'zigzag', 'bentPlate', 'weldedFrame', 'woodStringers', 'concrete']) {
   await page.click(`[data-testid="structure-${s}"]`);
   await wait(700);
   await shot(`10-konstrukcja-${s}`);

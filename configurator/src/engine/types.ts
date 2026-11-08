@@ -14,7 +14,7 @@ export type AlignX = 'left' | 'center' | 'right' | 'manual';
 export type AlignZ = 'back' | 'center' | 'front' | 'manual';
 export type WallKey = 'back' | 'front' | 'left' | 'right';
 
-export type StructureType = 'centralBeam' | 'sideStringers' | 'zigzag' | 'bentPlate' | 'weldedFrame';
+export type StructureType = 'centralBeam' | 'sideStringers' | 'zigzag' | 'bentPlate' | 'weldedFrame' | 'woodStringers' | 'concrete';
 export type LandingSupport = 'none' | 'fourPosts' | 'framePosts' | 'wall';
 export type RailingType = 'verticalBars' | 'flatBars' | 'horizontalBars' | 'perforated' | 'mesh' | 'solid' | 'glass';
 export type SideMode = 'balustrade' | 'wallHandrail' | 'none';
@@ -66,6 +66,10 @@ export interface StairConfig {
   manualX: number;
   manualZ: number;
   wallGap: number;
+  /** opcjonalnie osobny odstęp od lewej i prawej ściany (oś X); wallGap działa wtedy dla tylnej/przedniej */
+  wallGapSplit: boolean;
+  wallGapLeft: number;
+  wallGapRight: number;
   opening: OpeningConfig;
 }
 

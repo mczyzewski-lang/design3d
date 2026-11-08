@@ -71,14 +71,16 @@ export const FINISHES: Array<{ key: SteelFinish; label: string; roughness: numbe
   { key: 'brushed', label: 'Szczotkowana', roughness: 0.38, metalness: 0.9 },
 ];
 
-export type SupportTag = 'freestanding' | 'posts' | 'wall';
+export type SupportTag = 'freestanding' | 'posts' | 'wall' | 'monolithic';
 export const SUPPORT_TAG_LABEL: Record<SupportTag, string> = {
   freestanding: 'wolnostojąca',
   posts: 'wymaga słupów',
   wall: 'może wymagać ściany',
+  monolithic: 'wylewana na budowie',
 };
 
-export interface StructureSpec { key: StructureType; label: string; short: string; tag: SupportTag; closedRisersAllowed: boolean; description: string }
+export type StructureMaterial = 'steel' | 'wood' | 'concrete';
+export interface StructureSpec { key: StructureType; label: string; short: string; tag: SupportTag; closedRisersAllowed: boolean; description: string; material?: StructureMaterial }
 
 export const STRUCTURES: StructureSpec[] = [
   { key: 'centralBeam', label: 'Belka centralna', short: 'A', tag: 'freestanding', closedRisersAllowed: false, description: 'Profil zamknięty 200×120 pod osią biegu, żebra i płaskowniki pod stopnicami — efekt lewitacji.' },
@@ -86,7 +88,12 @@ export const STRUCTURES: StructureSpec[] = [
   { key: 'zigzag', label: 'Policzki zygzakowe', short: 'C', tag: 'freestanding', closedRisersAllowed: true, description: 'Profil w zęby piły kopiujący stopnie, stopnice oparte od góry.' },
   { key: 'bentPlate', label: 'Gięta blacha', short: 'D', tag: 'wall', closedRisersAllowed: true, description: 'Ciągła taśma 10 mm (stopień + podstopnica) z drewnianymi nakładkami i ukrytymi żebrami.' },
   { key: 'weldedFrame', label: 'Rama spawana', short: 'E', tag: 'posts', closedRisersAllowed: false, description: 'Dwie podłużnice 100×50, każda stopnica na ramce 30×30 ze słupkami; słupy pośrednie przy długich biegach.' },
+  { key: 'woodStringers', label: 'Policzki drewniane', short: 'F', tag: 'freestanding', closedRisersAllowed: true, material: 'wood', description: 'Klejone policzki 6×30 cm z tego samego drewna co stopnice, stopnice wpuszczone między policzki na ukrytych listwach — klasyczna konstrukcja drewniana.' },
+  { key: 'concrete', label: 'Płyta żelbetowa', short: 'G', tag: 'monolithic', closedRisersAllowed: true, material: 'concrete', description: 'Monolityczna płyta schodowa gr. 15 cm z betonowymi stopniami, obłożona drewnem; spocznik jako płyta żelbetowa. Wykonywana na etapie stanu surowego.' },
 ];
+
+/** Materiał konstrukcji nośnej (stal domyślnie). */
+export const structureMaterial = (k: StructureType): StructureMaterial => STRUCTURES.find((s) => s.key === k)?.material ?? 'steel';
 
 export const LANDING_SUPPORTS: Array<{ key: LandingSupport; label: string }> = [
   { key: 'none', label: 'Bez słupów (samonośny)' },

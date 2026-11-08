@@ -24,6 +24,8 @@ export function StructureThumb({ type }: { type: StructureType }) {
       {type === 'sideStringers' && <path d="M6 42 L56 8 L56 15 L12 42 Z" fill="currentColor" opacity="0.85" />}
       {type === 'zigzag' && <path d="M8 42 V38.4 H17 V31.9 H26 V25.4 H35 V18.9 H44 V12.4 H53 V16 L14 42 Z" fill="currentColor" opacity="0.85" />}
       {type === 'bentPlate' && <path d="M8 42 V38.4 H17 V31.9 H26 V25.4 H35 V18.9 H44 V12.4 H54" {...S} strokeWidth={2.2} />}
+      {type === 'woodStringers' && <path d="M6 42 L56 8 L56 17 L14 42 Z" fill="#9c7444" />}
+      {type === 'concrete' && <path d="M8 42 V38.4 H17 V31.9 H26 V25.4 H35 V18.9 H44 V12.4 H54 V20 L22 42 Z" fill="#a9a6a0" stroke="#7d7a75" strokeWidth="0.8" />}
       {type === 'weldedFrame' && (<><line x1="8" y1="42" x2="54" y2="14" {...S} strokeWidth={2.6} />{[0, 1, 2, 3, 4].map((i) => <rect key={i} x={9 + i * 9} y={38.4 - i * 6.5} width="8" height="2" {...S} strokeWidth={1} />)}<line x1="31" y1="28" x2="31" y2="42" {...S} strokeWidth={1.6} /></>)}
     </svg>
   );

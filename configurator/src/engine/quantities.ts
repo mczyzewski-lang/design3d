@@ -1,5 +1,5 @@
 // Zestawienie ilościowe (baza pod BOM) — BEZ cen.
-import { GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, railingSpec, stepStyleOf, structureSpec, woodSpec } from './catalog';
+import { GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, railingSpec, stepStyleOf, structureMaterial, structureSpec, woodSpec } from './catalog';
 import { pathLength } from './railingLayout';
 import type { Config, Solved } from './types';
 
@@ -50,23 +50,43 @@ export function quantities(c: Config, s: Solved): QtyItem[] {
 
   const slope = L.flights.reduce((a, f) => a + Math.hypot(f.length, f.topY - f.baseY), 0);
   const st = c.structure.type;
+  const mat = structureMaterial(st);
   const steelName = structureSpec(st).label;
-  const stringerCount = st === 'centralBeam' ? 1 : 2;
-  const profile = { centralBeam: 'profil 200×120', sideStringers: 'blacha 12 mm, h 260', zigzag: 'blacha 10 mm (zygzak)', bentPlate: 'taśma gięta 10 mm', weldedFrame: 'profil 100×50' }[st];
-  items.push({ group: 'Stal', name: `${steelName} — ${profile}`, qty: r2(slope * stringerCount), unit: 'mb' });
-  if (st === 'centralBeam') items.push({ group: 'Stal', name: 'Żebra + płaskowniki pod stopnicami', qty: treads, unit: 'kpl.' });
-  if (st === 'sideStringers') items.push({ group: 'Stal', name: 'Kątowniki pod stopnice', qty: treads * 2, unit: 'szt.' });
-  if (st === 'weldedFrame') {
-    items.push({ group: 'Stal', name: 'Ramki stopnic 30×30', qty: treads, unit: 'szt.' });
-    items.push({ group: 'Stal', name: 'Słupy pośrednie', qty: L.flights.reduce((a, f) => a + (f.length > 1.6 ? Math.floor(f.length / 1.6) * 2 : 0), 0), unit: 'szt.' });
+  if (mat === 'concrete') {
+    // płyta gr. 15 cm (prostopadle do spadku) + trójkąty stopni betonowych
+    const vol = L.flights.reduce((a, f) => a + f.width * (Math.hypot(f.length, f.topY - f.baseY) * 0.15 + f.treads * 0.5 * f.rise * f.going), 0)
+      + (L.winder ? L.winder.treads.reduce((a, tr) => a + polyArea(tr.poly!) * (s.calc.rise + 0.15), 0) : 0)
+      + landingArea * 0.18;
+    items.push({ group: 'Beton', name: 'Płyta schodowa żelbetowa C25/30, gr. 15 cm (z stopniami)', qty: Math.round(vol * 100) / 100, unit: 'm³' });
+    items.push({ group: 'Beton', name: 'Zbrojenie (szacunkowo 110 kg/m³)', qty: Math.round(vol * 110), unit: 'kg' });
+    items.push({ group: 'Beton', name: 'Deskowanie (spód + boki + czoła stopni)', qty: r2(L.flights.reduce((a, f) => {
+      const sl = Math.hypot(f.length, f.topY - f.baseY);
+      return a + sl * f.width + 2 * sl * 0.3 + f.risers * f.rise * f.width;
+    }, 0) + landingArea), unit: 'm²' });
+    if (L.landing) {
+      const posts = { none: 0, fourPosts: 4, framePosts: 2, wall: 0 }[c.structure.landingSupport];
+      if (posts) items.push({ group: 'Beton', name: 'Słupy żelbetowe spocznika 20×20', qty: posts, unit: 'szt.' });
+    }
+  } else {
+    const grp = mat === 'wood' ? 'Drewno' : 'Stal';
+    const stringerCount = st === 'centralBeam' ? 1 : 2;
+    const profile: Record<string, string> = { centralBeam: 'profil 200×120', sideStringers: 'blacha 12 mm, h 260', zigzag: 'blacha 10 mm (zygzak)', bentPlate: 'taśma gięta 10 mm', weldedFrame: 'profil 100×50', woodStringers: `klejonka ${wood.toLowerCase()} 60×300 mm` };
+    items.push({ group: grp, name: `${steelName} — ${profile[st]}`, qty: r2(slope * stringerCount), unit: 'mb' });
+    if (st === 'centralBeam') items.push({ group: 'Stal', name: 'Żebra + płaskowniki pod stopnicami', qty: treads, unit: 'kpl.' });
+    if (st === 'sideStringers') items.push({ group: 'Stal', name: 'Kątowniki pod stopnice', qty: treads * 2, unit: 'szt.' });
+    if (st === 'woodStringers') items.push({ group: 'Drewno', name: 'Listwy nośne pod stopnice (ukryte)', qty: treads * 2, unit: 'szt.' });
+    if (st === 'weldedFrame') {
+      items.push({ group: 'Stal', name: 'Ramki stopnic 30×30', qty: treads, unit: 'szt.' });
+      items.push({ group: 'Stal', name: 'Słupy pośrednie', qty: L.flights.reduce((a, f) => a + (f.length > 1.6 ? Math.floor(f.length / 1.6) * 2 : 0), 0), unit: 'szt.' });
+    }
+    if (L.landing) {
+      const per = 2 * (L.landing.rect.maxX - L.landing.rect.minX + L.landing.rect.maxZ - L.landing.rect.minZ);
+      items.push({ group: grp, name: 'Rama spocznika', qty: r2(per), unit: 'mb' });
+      const posts = { none: 0, fourPosts: 4, framePosts: 2, wall: 0 }[c.structure.landingSupport];
+      if (posts) items.push({ group: grp, name: 'Słupy spocznika', qty: posts, unit: 'szt.' });
+    }
+    items.push({ group: 'Stal', name: mat === 'wood' ? 'Kotwy stalowe policzków (posadzka + strop)' : 'Płyty kotwiące (posadzka + strop)', qty: stringerCount * 2, unit: 'szt.' });
   }
-  if (L.landing) {
-    const per = 2 * (L.landing.rect.maxX - L.landing.rect.minX + L.landing.rect.maxZ - L.landing.rect.minZ);
-    items.push({ group: 'Stal', name: 'Rama spocznika', qty: r2(per), unit: 'mb' });
-    const posts = { none: 0, fourPosts: 4, framePosts: 2, wall: 0 }[c.structure.landingSupport];
-    if (posts) items.push({ group: 'Stal', name: 'Słupy spocznika', qty: posts, unit: 'szt.' });
-  }
-  items.push({ group: 'Stal', name: 'Płyty kotwiące (posadzka + strop)', qty: stringerCount * 2, unit: 'szt.' });
 
   const rc = c.railing;
   const spec = railingSpec(rc.type);

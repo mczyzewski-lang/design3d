@@ -270,3 +270,33 @@ describe('różne', () => {
     }
   });
 });
+
+describe('osobny odstęp z lewej i prawej', () => {
+  const at = (p: (c: Config) => void) => { const c = cloneConfig(DEFAULT_CONFIG); p(c); return { c, s: solve(c) }; };
+  test('lewo / prawo / środek liczone od własnych odstępów', () => {
+    const L = at((c) => { c.stairs.alignX = 'left'; c.stairs.wallGapSplit = true; c.stairs.wallGapLeft = 0.25; c.stairs.wallGapRight = 0.02; });
+    expect(L.s.fit.gaps.left).toBeCloseTo(0.25, 6);
+    const R = at((c) => { c.stairs.alignX = 'right'; c.stairs.wallGapSplit = true; c.stairs.wallGapLeft = 0.25; c.stairs.wallGapRight = 0.02; });
+    expect(R.s.fit.gaps.right).toBeCloseTo(0.02, 6);
+    const C = at((c) => { c.room.width = 3; c.stairs.alignX = 'center'; c.stairs.wallGapSplit = true; c.stairs.wallGapLeft = 0.4; c.stairs.wallGapRight = 0; });
+    expect(C.s.fit.gaps.left - C.s.fit.gaps.right).toBeCloseTo(0.4, 6);
+  });
+  test('wyłączone: jeden odstęp jak dotąd; stare konfiguracje dostają domyślne pola', () => {
+    const a = at((c) => { c.stairs.alignX = 'left'; c.stairs.wallGap = 0.12; c.stairs.wallGapLeft = 0.5; });
+    expect(a.s.fit.gaps.left).toBeCloseTo(0.12, 6);
+    const old = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    delete old.stairs.wallGapSplit; delete old.stairs.wallGapLeft; delete old.stairs.wallGapRight;
+    const m = mergeWithDefaults(old);
+    expect(m.stairs.wallGapSplit).toBe(false);
+    expect(solve(m).fit.fits).toBe(true);
+  });
+  test('zestawienie: beton w m³ i drewniane policzki', () => {
+    const b = at((c) => { c.structure.type = 'concrete'; });
+    const qb = quantities(b.c, b.s);
+    expect(qb.some((q) => q.group === 'Beton' && q.unit === 'm³' && q.qty > 0.3)).toBe(true);
+    expect(qb.some((q) => q.name.startsWith('Płyty kotwiące'))).toBe(false);
+    const w = at((c) => { c.structure.type = 'woodStringers'; });
+    const qw = quantities(w.c, w.s);
+    expect(qw.find((q) => q.name.startsWith('Policzki drewniane'))?.group).toBe('Drewno');
+  });
+});

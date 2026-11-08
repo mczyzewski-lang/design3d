@@ -1,6 +1,7 @@
 // „Dopasuj automatycznie”: przeszukanie parametrów, szybki filtr rozmiarem analitycznym, pełna walidacja najlepszych.
 import { LIMITS } from './catalog';
 import { analyticSize, spiralParams, windersOf } from './calc';
+import { wallGaps } from './layout';
 import { quickSolve, validate, applyPatch } from './validate';
 import type { Config, EntryDir, Patch, Shape } from './types';
 
@@ -20,9 +21,9 @@ const ENTRIES: EntryDir[] = ['back', 'front', 'left', 'right'];
 
 function spiralCands(c: Config): { cands: Cand[]; tested: number } {
   const H = c.room.height;
-  const gap = c.stairs.wallGap;
+  const g = wallGaps(c.stairs);
   const m = c.railing.outer !== 'none' ? LIMITS.railMargin : 0;
-  const maxD = Math.min(LIMITS.spiralMaxDiameter, c.room.width - 2 * gap - 2 * m, c.room.depth - 2 * gap - 2 * m);
+  const maxD = Math.min(LIMITS.spiralMaxDiameter, c.room.width - g.left - g.right - 2 * m, c.room.depth - g.back - g.front - 2 * m);
   const cands: Cand[] = [];
   let tested = 0;
   const nMin = Math.ceil(H / LIMITS.riserMax - 1e-9);
@@ -57,7 +58,7 @@ function search(c: Config, shape: Shape, maxFull = 80): { best: Cand | null; tes
   const k = windersOf({ ...c.stairs, shape });
   const wCur = c.stairs.width;
   const nz = c.stairs.nosing;
-  const gap = c.stairs.wallGap;
+  const g = wallGaps(c.stairs);
   const W = c.room.width;
   const D = c.room.depth;
   const outer = c.railing.outer === 'balustrade' ? LIMITS.railMargin : 0;
@@ -90,7 +91,7 @@ function search(c: Config, shape: Shape, maxFull = 80): { best: Cand | null; tes
               const alongZ = entry === 'back' || entry === 'front';
               const fx = alongZ ? across : along;
               const fz = alongZ ? along : across;
-              if (fx + 2 * gap > W + 1e-9 || fz + 2 * gap > D + 1e-9) continue;
+              if (fx + g.left + g.right > W + 1e-9 || fz + g.back + g.front > D + 1e-9) continue;
               let cost = Math.abs(bl - 0.63) * 100 + Math.abs(h - 0.175) * 150;
               if (s < 0.27) cost += (0.27 - s) * 200;
               cost += (wCur - w) * 60;

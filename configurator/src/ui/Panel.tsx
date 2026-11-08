@@ -31,7 +31,7 @@ export function Panel() {
       <CommentsCard />
       <Section index={1} title="Typ schodów" open={open === 1} onToggle={() => t(1)}><TypeSection /></Section>
       <Section index={2} title="Wymiary przestrzeni" open={open === 2} onToggle={() => t(2)}><DimensionsSection /></Section>
-      <Section index={3} title="Konstrukcja stalowa" open={open === 3} onToggle={() => t(3)}><StructureSection /></Section>
+      <Section index={3} title="Konstrukcja" open={open === 3} onToggle={() => t(3)}><StructureSection /></Section>
       <Section index={4} title="Stopnice drewniane" open={open === 4} onToggle={() => t(4)}><TreadsSection /></Section>
       <Section index={5} title="Balustrady" open={open === 5} onToggle={() => t(5)}><RailingSection /></Section>
       <Section index={6} title="Kolory i materiały" open={open === 6} onToggle={() => t(6)}><ColorsSection /></Section>
@@ -88,7 +88,14 @@ function TypeSection() {
         <Segmented value={s.alignZ} onChange={(v) => setStairs({ alignZ: v })} size="sm" options={[{ value: 'back', label: 'Tył' }, { value: 'center', label: 'Środek' }, { value: 'front', label: 'Przód' }, { value: 'manual', label: 'Ręcznie' }]} />
       </Field>
       {s.alignZ === 'manual' && <SliderField label="Odległość od tylnej ściany" value={s.manualZ} onChange={(v) => setStairs({ manualZ: v })} min={-100} max={c.room.depth * 100} />}
-      <SliderField label="Odstęp od ścian" value={s.wallGap} onChange={(v) => setStairs({ wallGap: v })} min={0} max={60} />
+      <SliderField testId="f-wallgap" label={s.wallGapSplit ? 'Odstęp od ściany tylnej / przedniej' : 'Odstęp od ścian'} value={s.wallGap} onChange={(v) => setStairs(s.wallGapSplit ? { wallGap: v } : { wallGap: v, wallGapLeft: v, wallGapRight: v })} min={0} max={60} />
+      <Toggle label="Osobny odstęp z lewej i z prawej" checked={s.wallGapSplit} onChange={(v) => setStairs(v ? { wallGapSplit: true, wallGapLeft: s.wallGap, wallGapRight: s.wallGap } : { wallGapSplit: false })} />
+      {s.wallGapSplit && (
+        <>
+          <SliderField testId="f-wallgap-left" label="Odstęp od lewej ściany" value={s.wallGapLeft} onChange={(v) => setStairs({ wallGapLeft: v })} min={0} max={100} hint={s.alignX === 'right' ? 'Przy położeniu „Prawo” liczy się odstęp od prawej ściany.' : undefined} />
+          <SliderField testId="f-wallgap-right" label="Odstęp od prawej ściany" value={s.wallGapRight} onChange={(v) => setStairs({ wallGapRight: v })} min={0} max={100} hint={s.alignX === 'left' ? 'Przy położeniu „Lewo” liczy się odstęp od lewej ściany.' : s.alignX === 'center' ? 'Przy „Środku” schody są wyśrodkowane między odstępami.' : undefined} />
+        </>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // Stal + stopnice + spocznik dla 5 konstrukcji. Każdy bieg budowany w układzie biegu
 // (x = lewa ręka, y = góra, z = kierunek marszu; początek na linii pierwszego podnoszenia, środek szerokości).
 import * as THREE from 'three';
-import { LIMITS, stepStyleOf } from '../../engine/catalog';
+import { LIMITS, stepStyleOf, structureMaterial } from '../../engine/catalog';
 import type { Config, FlightEl, Solved, StepStyle, StructureType, WallKey } from '../../engine/types';
 import { Parts, beam, boxMinMax, clipHalf, cyl, extrudePlan, extrudeZY, seeded, type MatKey, type P2 } from './primitives';
 
@@ -45,6 +45,8 @@ export function stringerSpec(type: StructureType, w: number): { xs: number[]; sw
     case 'zigzag': return { xs: [w / 2 - 0.1, -(w / 2 - 0.1)], sw: 0.012, sh: 0.2 };
     case 'bentPlate': return { xs: [w / 4, -w / 4], sw: 0.01, sh: 0.12 };
     case 'weldedFrame': return { xs: [w / 2 - 0.05, -(w / 2 - 0.05)], sw: 0.05, sh: 0.1 };
+    case 'woodStringers': return { xs: [w / 2 - 0.03, -(w / 2 - 0.03)], sw: 0.06, sh: 0.3 };
+    case 'concrete': return { xs: [0], sw: w, sh: 0.15 };
   }
 }
 
@@ -202,6 +204,31 @@ function buildFlight(ctx: Ctx, f: FlightEl) {
     anchorFoot(0);
     anchorTop(0);
     if (closed) addRisers(ctx, m, f, -w / 2 + 0.005, w / 2 - 0.005);
+  } else if (type === 'woodStringers') {
+    // klejone policzki drewniane, stopnice wpuszczone między nie na ukrytych listwach
+    const cTop = h + 0.06;
+    const Dv = spec.sh / cos;
+    const poly = slopedPlate(f, cTop, Dv, plateStartZ, L, yMinPlate, topRel + 0.06);
+    for (const x of spec.xs) {
+      P.add('wood', extrudeZY(poly, x - spec.sw / 2, spec.sw), m, 'woodStringer');
+      anchorFoot(x);
+      anchorTop(x);
+    }
+    const inner = w / 2 - spec.sw;
+    for (let i = 1; i <= n - 1; i++) {
+      addTread(ctx, m, -inner, inner, i, h, sg, f.index);
+      for (const sgn of [1, -1]) {
+        const [xa, xb] = sgn > 0 ? [inner - 0.025, inner] : [-inner, -inner + 0.025];
+        P.add('wood', boxMinMax(xa, xb, i * h - t - 0.035, i * h - t, (i - 1) * sg + 0.01, i * sg - 0.03), m, 'cleat');
+      }
+    }
+    if (closed) addRisers(ctx, m, f, -inner, inner);
+  } else if (type === 'concrete') {
+    // monolityczna płyta schodowa: stopnie betonowe pod stopnicami, spód równoległy do spadku
+    const prof = zigzagProfile(f, t, spec.sh, f.startsAtLanding);
+    P.add('concrete', extrudeZY(prof, -w / 2, w), m, 'concreteSlab');
+    for (let i = 1; i <= n - 1; i++) addTread(ctx, m, -w / 2, w / 2, i, h, sg, f.index);
+    if (closed) addRisers(ctx, m, f, -w / 2 + 0.002, w / 2 - 0.002);
   } else if (type === 'weldedFrame') {
     const fr = 0.03;
     // podłużnice pod tylnymi narożami ramek stopnic
@@ -258,22 +285,29 @@ function landingStructure(ctx: Ctx, meta: StairMeta) {
   const y = Ld.y;
   const t = c.stairs.treadThickness; // spocznik zawsze z płyty, także przy stopniach klockowych
   const support = c.structure.landingSupport;
-  const depth = support === 'none' ? 0.2 : 0.14;
-  const bw = 0.06;
+  const mat = structureMaterial(c.structure.type);
+  const fm: MatKey = mat; // materiał ramy / płyty / słupów spocznika
+  const depth = mat === 'concrete' ? 0.18 : support === 'none' ? 0.2 : 0.14;
+  const bw = mat === 'wood' ? 0.08 : 0.06;
   const yTop = y - t;
   const yBot = yTop - depth;
   // okładzina drewniana spocznika
   P.add('wood', boxMinMax(r.minX, r.maxX, y - t, y, r.minZ, r.maxZ, { rounded: ctx.rounded, uvOff: [0.37, 0.11] }), undefined, 'landingTop');
   P.add('led', boxMinMax(r.minX + 0.02, r.maxX - 0.02, y - t - 0.006, y - t - 0.001, r.minZ + 0.012, r.minZ + 0.024), undefined, 'led');
+  if (mat === 'concrete') {
+    // płyta żelbetowa spocznika zespolona z płytami biegów
+    P.add('concrete', boxMinMax(r.minX, r.maxX, yBot, yTop, r.minZ, r.maxZ), undefined, 'landingSlab');
+    meta.landingFrame = true;
+  } else {
   // rama skrzynkowa (obwód) + poprzeczki
-  P.add('steel', boxMinMax(r.minX, r.maxX, yBot, yTop, r.minZ, r.minZ + bw), undefined, 'landingFrame');
-  P.add('steel', boxMinMax(r.minX, r.maxX, yBot, yTop, r.maxZ - bw, r.maxZ), undefined, 'landingFrame');
-  P.add('steel', boxMinMax(r.minX, r.minX + bw, yBot, yTop, r.minZ, r.maxZ), undefined, 'landingFrame');
-  P.add('steel', boxMinMax(r.maxX - bw, r.maxX, yBot, yTop, r.minZ, r.maxZ), undefined, 'landingFrame');
+  P.add(fm, boxMinMax(r.minX, r.maxX, yBot, yTop, r.minZ, r.minZ + bw), undefined, 'landingFrame');
+  P.add(fm, boxMinMax(r.minX, r.maxX, yBot, yTop, r.maxZ - bw, r.maxZ), undefined, 'landingFrame');
+  P.add(fm, boxMinMax(r.minX, r.minX + bw, yBot, yTop, r.minZ, r.maxZ), undefined, 'landingFrame');
+  P.add(fm, boxMinMax(r.maxX - bw, r.maxX, yBot, yTop, r.minZ, r.maxZ), undefined, 'landingFrame');
   const spanX = r.maxX - r.minX > r.maxZ - r.minZ;
   const mid = spanX ? (r.minX + r.maxX) / 2 : (r.minZ + r.maxZ) / 2;
-  if (spanX) P.add('steel', boxMinMax(mid - bw / 2, mid + bw / 2, yBot + 0.03, yTop, r.minZ, r.maxZ), undefined, 'landingFrame');
-  else P.add('steel', boxMinMax(r.minX, r.maxX, yBot + 0.03, yTop, mid - bw / 2, mid + bw / 2), undefined, 'landingFrame');
+  if (spanX) P.add(fm, boxMinMax(mid - bw / 2, mid + bw / 2, yBot + 0.03, yTop, r.minZ, r.maxZ), undefined, 'landingFrame');
+  else P.add(fm, boxMinMax(r.minX, r.maxX, yBot + 0.03, yTop, mid - bw / 2, mid + bw / 2), undefined, 'landingFrame');
   meta.landingFrame = true;
 
   // belki biegów przechodzące pod spocznikiem (ciągłość konstrukcji) — dla każdej konstrukcji
@@ -286,10 +320,11 @@ function landingStructure(ctx: Ctx, meta: StairMeta) {
     const yRel = yTop - f.baseY;
     const sh = Math.min(spec.sh, depth);
     for (const x of spec.xs) {
-      if (f.endsAtLanding) P.add('steel', boxMinMax(x - spec.sw / 2, x + spec.sw / 2, yRel - sh, yRel, f.length, f.length + ext), m, 'continuousBeam');
-      else if (f.startsAtLanding) P.add('steel', boxMinMax(x - spec.sw / 2, x + spec.sw / 2, yRel - sh, yRel, -ext, 0), m, 'continuousBeam');
+      if (f.endsAtLanding) P.add(fm, boxMinMax(x - spec.sw / 2, x + spec.sw / 2, yRel - sh, yRel, f.length, f.length + ext), m, 'continuousBeam');
+      else if (f.startsAtLanding) P.add(fm, boxMinMax(x - spec.sw / 2, x + spec.sw / 2, yRel - sh, yRel, -ext, 0), m, 'continuousBeam');
     }
     meta.continuousBeams++;
+  }
   }
 
   // podparcie
@@ -305,9 +340,12 @@ function landingStructure(ctx: Ctx, meta: StairMeta) {
   const post = (x: number, z: number) => {
     const px = Math.min(Math.max(x, r.minX + 0.05), r.maxX - 0.05);
     const pz = Math.min(Math.max(z, r.minZ + 0.05), r.maxZ - 0.05);
-    P.add('steel', boxMinMax(px - 0.04, px + 0.04, 0, yBot, pz - 0.04, pz + 0.04), undefined, 'landingPost');
-    P.add('steel', boxMinMax(px - 0.09, px + 0.09, 0, 0.012, pz - 0.09, pz + 0.09), undefined, 'anchorPlate');
-    ctx.postsOut.push({ x: px, z: pz, yBottom: 0, yTop: yBot, kind: 'landing' });
+    const ph = mat === 'concrete' ? 0.1 : mat === 'wood' ? 0.05 : 0.04;
+    const qx = Math.min(Math.max(px, r.minX + ph), r.maxX - ph);
+    const qz = Math.min(Math.max(pz, r.minZ + ph), r.maxZ - ph);
+    P.add(fm, boxMinMax(qx - ph, qx + ph, 0, yBot, qz - ph, qz + ph), undefined, 'landingPost');
+    if (mat !== 'concrete') P.add('steel', boxMinMax(qx - 0.09, qx + 0.09, 0, 0.012, qz - 0.09, qz + 0.09), undefined, 'anchorPlate');
+    ctx.postsOut.push({ x: qx, z: qz, yBottom: 0, yTop: yBot, kind: 'landing' });
   };
   if (support === 'fourPosts') corners.forEach((k) => post(k.x, k.z));
   else if (support === 'framePosts') {
@@ -320,6 +358,7 @@ function landingStructure(ctx: Ctx, meta: StairMeta) {
     (Object.keys(adj) as WallKey[]).forEach((wk) => {
       if (!adj[wk]) return;
       meta.wallAnchors++;
+      if (mat === 'concrete') return; // płyta oparta bezpośrednio na ścianie
       const pl = 0.012;
       if (wk === 'left') P.add('steel', boxMinMax(r.minX - pl - Math.max(0, r.minX), r.minX, yBot, yTop, r.minZ + 0.05, r.maxZ - 0.05), undefined, 'wallAnchor');
       if (wk === 'right') P.add('steel', boxMinMax(r.maxX, room.width, yBot, yTop, r.minZ + 0.05, r.maxZ - 0.05), undefined, 'wallAnchor');
@@ -352,6 +391,7 @@ function buildWinders(ctx: Ctx, meta: StairMeta) {
   const { P, c, s } = ctx;
   const W = s.layout.winder!;
   const t = ctx.t;
+  const mat = structureMaterial(c.structure.type);
   const piv = W.pivot;
   for (const tr of W.treads) {
     const poly = tr.poly!;
@@ -369,14 +409,21 @@ function buildWinders(ctx: Ctx, meta: StairMeta) {
       const r1 = new THREE.Vector3(b.x, r0.y, b.z);
       P.add('riser', beam(r0, r1, 0.018, s.calc.rise - t), undefined, 'riser');
     }
+    if (mat === 'concrete') {
+      // stopnie zabiegowe wylewane razem z płytą
+      P.add('concrete', extrudePlan(poly, Math.max(0, tr.y - t - s.calc.rise - 0.15), tr.y - t), undefined, 'concreteWinder');
+      continue;
+    }
     // ramię promieniowe pod stopnicą (wzdłuż dwusiecznej)
     const mid = poly[Math.floor(poly.length / 2)];
     const q0 = new THREE.Vector3(piv.x, tr.y - t - 0.03, piv.z);
     const q1 = new THREE.Vector3(piv.x + (mid.x - piv.x) * 0.92, tr.y - t - 0.03, piv.z + (mid.z - piv.z) * 0.92);
-    P.add('steel', beam(q0, q1, 0.05, 0.06), undefined, 'winderArm');
+    P.add(mat, beam(q0, q1, mat === 'wood' ? 0.06 : 0.05, mat === 'wood' ? 0.08 : 0.06), undefined, 'winderArm');
   }
+  if (mat === 'concrete') { meta.landingFrame = true; return; }
   const post = (x: number, z: number, yTop: number) => {
-    P.add('steel', boxMinMax(x - 0.04, x + 0.04, 0, yTop, z - 0.04, z + 0.04), undefined, 'winderPost');
+    const ph = mat === 'wood' ? 0.05 : 0.04;
+    P.add(mat, boxMinMax(x - ph, x + ph, 0, yTop, z - ph, z + ph), undefined, 'winderPost');
     P.add('steel', boxMinMax(x - 0.09, x + 0.09, 0, 0.012, z - 0.09, z + 0.09), undefined, 'anchorPlate');
     meta.posts.push({ x, z, yBottom: 0, yTop, kind: 'landing' });
   };

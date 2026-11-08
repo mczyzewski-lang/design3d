@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
-export type MatKey = 'steel' | 'wood' | 'riser' | 'led' | 'railSteel' | 'railWood' | 'glass' | 'glassEdge' | 'perforated' | 'mesh';
+export type MatKey = 'steel' | 'wood' | 'concrete' | 'riser' | 'led' | 'railSteel' | 'railWood' | 'glass' | 'glassEdge' | 'perforated' | 'mesh';
 
 /** Zbiera geometrie per materiał; na końcu scala w jedną siatkę na materiał. */
 export class Parts {

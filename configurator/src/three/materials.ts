@@ -22,6 +22,7 @@ export function createMaterials(): Materials {
   const wood = new THREE.MeshStandardMaterial({ map: w.map, bumpMap: w.bump, bumpScale: 0.6, roughness: 0.58, metalness: 0 });
   const railWood = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.55, metalness: 0 });
   const riser = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.6, metalness: 0 });
+  const concrete = new THREE.MeshStandardMaterial({ color: '#cfccc6', roughness: 0.95, metalness: 0 });
   const led = new THREE.MeshStandardMaterial({ color: '#ffd2a1', emissive: new THREE.Color('#ffb46b'), emissiveIntensity: 2, toneMapped: false });
   const glass = new THREE.MeshPhysicalMaterial({ color: '#d9efe9', roughness: 0.04, metalness: 0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.2 });
   const glassEdge = new THREE.MeshStandardMaterial({ color: '#4f9c84', roughness: 0.15, transparent: true, opacity: 0.85 });
@@ -31,7 +32,7 @@ export function createMaterials(): Materials {
   mesh.alphaToCoverage = true;
   const wallTex = wallTexture();
   return {
-    stair: { steel, railSteel, wood, riser, railWood, led, glass, glassEdge, perforated, mesh },
+    stair: { steel, railSteel, wood, concrete, riser, railWood, led, glass, glassEdge, perforated, mesh },
     floor: new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.6 }),
     upperFloor: new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.6 }),
     wall: new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.92, color: '#ffffff' }),

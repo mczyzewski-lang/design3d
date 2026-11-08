@@ -222,11 +222,13 @@ export function validate(c: Config, calc: Calc, layout: Layout, fit: Fit, openin
     zigzag: 'Policzki zygzakowe kotwione w posadzce i czole stropu.',
     bentPlate: 'Gięta blacha: przy dłuższych biegach może wymagać dodatkowego mocowania do ściany.',
     weldedFrame: 'Rama spawana ze słupami pośrednimi pod biegami dłuższymi niż ok. 1,6 m.',
+    woodStringers: 'Policzki drewniane kotwione kątownikami do posadzki i czoła stropu; przy długich biegach lub szerokości ponad 100 cm zalecane dodatkowe podparcie albo mocowanie policzka do ściany.',
+    concrete: 'Płyta żelbetowa oparta na posadzce/fundamencie i stropie — wymaga projektu konstrukcyjnego (zbrojenie, oparcie) i wykonania na etapie stanu surowego.',
   };
   if (spiral) m.push({ id: 'anchor', level: 'info', title: 'Kotwienie konstrukcji.', cause: 'Kolumna centralna Ø120 mm kotwiona w posadzce i stropie, stopnie na tulejach dystansowych, górny podest mocowany do czoła stropu.' });
   else m.push({ id: 'anchor', level: 'info', title: 'Kotwienie konstrukcji.', cause: infos[st.type] });
   if (layout.winder) {
-    m.push({ id: 'landing-support', level: 'info', title: 'Stopnie zabiegowe.', cause: `${layout.winder.treads.length} stopnie zabiegowe na ramie stalowej z ramionami promieniowymi i słupem w narożu zewnętrznym.` });
+    m.push({ id: 'landing-support', level: 'info', title: 'Stopnie zabiegowe.', cause: `${layout.winder.treads.length} stopnie zabiegowe ${st.type === 'concrete' ? 'wylewane razem z płytą żelbetową' : st.type === 'woodStringers' ? 'na drewnianych belkach promieniowych ze słupem w narożu zewnętrznym' : 'na ramie stalowej z ramionami promieniowymi i słupem w narożu zewnętrznym'}.` });
   } else if (s.shape !== 'I' && !spiral) {
     const ls: Record<string, string> = {
       none: 'Spocznik samonośny: rama skrzynkowa zespolona z belkami biegów, kotwienie wyłącznie w posadzce i stropie.',
@@ -234,7 +236,7 @@ export function validate(c: Config, calc: Calc, layout: Layout, fit: Fit, openin
       framePosts: 'Spocznik: rama + 2 słupy przy dalszej krawędzi.',
       wall: 'Spocznik mocowany blachami do przylegających ścian; słupy tylko przy wolnych narożach.',
     };
-    m.push({ id: 'landing-support', level: 'info', title: 'Podparcie spocznika.', cause: ls[st.landingSupport] });
+    m.push({ id: 'landing-support', level: 'info', title: 'Podparcie spocznika.', cause: st.type === 'concrete' ? `Spocznik jako płyta żelbetowa gr. 18 cm${st.landingSupport === 'fourPosts' || st.landingSupport === 'framePosts' ? ' na słupach żelbetowych' : st.landingSupport === 'wall' ? ' oparta na ścianach' : ', zespolona z płytami biegów'}.` : ls[st.landingSupport] });
   }
   if (rc.type === 'glass' && anyBalustrade) {
     m.push({ id: 'glass-info', level: 'info', title: 'Szkło VSG.', cause: 'Panele szklane mocowane na uchwytach punktowych do konstrukcji — bez słupków.' });
