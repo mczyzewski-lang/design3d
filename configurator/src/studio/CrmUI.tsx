@@ -5,8 +5,10 @@ import { ArrowLeft, Bell, Box, CalendarDays, ChevronRight, Columns3, Eye, List, 
 import { api, type CrmContact, type CrmHistoryItem, type CrmNotification, type CrmOverview, type CrmQuote, type QuoteStatus } from './api';
 import { useStudio } from './studioStore';
 import { ConsentText } from './Consent';
+import { DemoActivity, DemoBanner, DemoCalendar, DemoContracts, DemoEmail, DemoLink } from './CrmDemo';
 
 type Tab = 'quotes' | 'contacts' | 'contracts' | 'activity' | 'calendar' | 'email' | 'profile';
+const DEMO_TABS: Tab[] = ['contracts', 'activity', 'calendar', 'email'];
 const TABS: Array<{ key: Tab; label: string; icon: ReactNode }> = [
   { key: 'quotes', label: 'Wyceny', icon: <Box size={20} className="md:h-4 md:w-4" /> },
   { key: 'contacts', label: 'Kontakty', icon: <Users size={20} className="md:h-4 md:w-4" /> },
@@ -44,6 +46,11 @@ export function CrmShell() {
   const initials = me ? `${me.firstName[0] ?? ''}${me.lastName[0] ?? ''}`.toUpperCase() : '';
   const fresh = data?.quotes.filter((q) => q.isNew).length ?? 0;
   const badge: Partial<Record<Tab, number>> = { quotes: fresh, activity: data?.unread ?? 0 };
+  // tryb demo: przykładowe umowy, terminy, e-mail i powiadomienia (tylko front)
+  const [demo, setDemoState] = useState(() => { try { return localStorage.getItem('crm_demo') === '1'; } catch { return false; } });
+  const setDemo = (v: boolean) => { setDemoState(v); try { localStorage.setItem('crm_demo', v ? '1' : '0'); } catch { /* tryb prywatny */ } };
+  const demoTab = demo && DEMO_TABS.includes(tab);
+  const demoLink = data && !demo && DEMO_TABS.includes(tab) ? <div className="mx-auto max-w-3xl text-center"><DemoLink onClick={() => setDemo(true)} /></div> : null;
 
   return (
     <div className="flex h-full flex-col bg-paper" data-testid="crm">
@@ -82,10 +89,16 @@ export function CrmShell() {
           {!data && !error && <p className="text-[13px] text-muted">Wczytywanie…</p>}
           {data && tab === 'quotes' && <Quotes data={data} highlight={highlight} reload={load} />}
           {data && tab === 'contacts' && <Contacts data={data} reload={load} />}
-          {data && tab === 'contracts' && <Contracts data={data} />}
-          {data && tab === 'activity' && <Activity onSeen={() => setData((d) => (d ? { ...d, unread: 0 } : d))} />}
-          {data && tab === 'calendar' && <Placeholder icon={<CalendarDays />} title="Kalendarz pomiarów i montaży" text="Planuj pomiary u inwestorów i terminy montażu przy każdej wycenie. Przypomnienia SMS dla Ciebie i klienta." badge={<Pro />} />}
-          {data && tab === 'email' && <EmailTab />}
+          {data && demoTab && <DemoBanner onExit={() => setDemo(false)} />}
+          {data && demoTab && tab === 'contracts' && <DemoContracts />}
+          {data && demoTab && tab === 'activity' && <DemoActivity />}
+          {data && demoTab && tab === 'calendar' && <DemoCalendar />}
+          {data && demoTab && tab === 'email' && <DemoEmail />}
+          {data && !demoTab && tab === 'contracts' && <Contracts data={data} />}
+          {data && !demoTab && tab === 'activity' && <Activity onSeen={() => setData((d) => (d ? { ...d, unread: 0 } : d))} />}
+          {data && !demoTab && tab === 'calendar' && <Placeholder icon={<CalendarDays />} title="Kalendarz pomiarów i montaży" text="Planuj pomiary u inwestorów i terminy montażu przy każdej wycenie. Przypomnienia SMS dla Ciebie i klienta." badge={<Pro />} />}
+          {data && !demoTab && tab === 'email' && <EmailTab />}
+          {demoLink}
           {data && tab === 'profile' && <Profile data={data} reload={load} />}
         </main>
       </div>

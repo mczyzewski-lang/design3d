@@ -156,7 +156,7 @@ const GRID = { 2: 'md:grid-cols-2', 3: 'md:grid-cols-3', 4: 'md:grid-cols-4', 5:
 
 export function Choices({ children, cols = 4, item = 'md', testId }: { children: ReactNode; cols?: keyof typeof GRID; item?: keyof typeof ITEM_W; testId?: string }) {
   return (
-    <div data-testid={testId} className={`choices -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto px-4 pb-1.5 md:scroll-px-0 md:mx-0 md:grid md:overflow-visible md:px-0 md:pb-0 ${GRID[cols]} ${ITEM_W[item]} [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto`}>
+    <div data-testid={testId} className={`choices -mx-3.5 flex snap-x snap-mandatory scroll-px-3.5 gap-2 overflow-x-auto px-3.5 pb-1.5 md:scroll-px-0 md:mx-0 md:grid md:overflow-visible md:px-0 md:pb-0 ${GRID[cols]} ${ITEM_W[item]} [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto`}>
       {children}
     </div>
   );

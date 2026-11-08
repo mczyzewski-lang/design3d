@@ -10,7 +10,7 @@ import { ConsentText } from './Consent';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
 
-function Modal({ open, onClose, children, width = 'max-w-md' }: { open: boolean; onClose: () => void; children: ReactNode; width?: string }) {
+export function Modal({ open, onClose, children, width = 'max-w-md' }: { open: boolean; onClose: () => void; children: ReactNode; width?: string }) {
   // portal do <body>: rodzic z backdrop-filter (nagłówek) zamykałby „fixed” w swoim obszarze
   return createPortal(
     <AnimatePresence>
@@ -26,6 +26,36 @@ function Modal({ open, onClose, children, width = 'max-w-md' }: { open: boolean;
       )}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+// ---------------- O design3d (stuknięcie logo na scenie) ----------------
+const ABOUT_STEPS: Array<[string, string]> = [
+  ['Wyklikaj schody w 3D', 'Układ, konstrukcja, stopnie, balustrada i oświetlenie — wymiary i nachylenie liczą się same, a analiza pilnuje norm.'],
+  ['Zapisz i udostępnij', 'Link do projektu wyślesz SMS-em lub e-mailem. Domownicy i wykonawca komentują bezpośrednio na modelu.'],
+  ['Porównaj wyceny z okolicy', 'Wybierz wykonawców w promieniu 50 km — dostaną gotowy projekt z wymiarami i odpiszą z wyceną.'],
+];
+export function AboutDialog({ open, onClose, onShowMenu }: { open: boolean; onClose: () => void; onShowMenu: () => void }) {
+  return (
+    <Modal open={open} onClose={onClose}>
+      <div data-testid="about-dialog">
+        <img src={`${import.meta.env.BASE_URL}brand/design3d-schody-logo.svg`} alt="design3d schody" className="h-8 w-auto" />
+        <p className="mt-3 text-[14px] leading-relaxed text-ink/80">Bezpłatny konfigurator schodów 3D. Zaprojektuj schody w kilka minut, bez rysowania i bez wpisywania wymiarów.</p>
+        <ol className="mt-4 space-y-3">
+          {ABOUT_STEPS.map(([t, d], i) => (
+            <li key={t} className="flex gap-3">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-oak text-[12.5px] font-semibold text-white">{i + 1}</span>
+              <div><div className="text-[14px] font-semibold">{t}</div><div className="text-[12.5px] leading-snug text-muted">{d}</div></div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={onClose} data-testid="about-close" className="rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-ink/85">Wróć do projektu</button>
+          <button type="button" onClick={() => { onClose(); onShowMenu(); }} className="rounded-full border border-line px-4 py-2 text-[13px] hover:border-ink/40">Pokaż menu</button>
+          <a href="/" className="ml-auto text-[12.5px] text-muted underline-offset-2 hover:underline">design3d.pl</a>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

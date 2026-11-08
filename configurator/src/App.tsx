@@ -4,7 +4,7 @@ import { TopBar, InfoBar, BottomBar } from './ui/Bars';
 import { Panel } from './ui/Panel';
 import { useStore, useView } from './store/store';
 import { configFromHash } from './engine/share';
-import { CommentComposer, CtaBar, ShareGate } from './studio/StudioUI';
+import { AboutDialog, CommentComposer, CtaBar, ShareGate } from './studio/StudioUI';
 import { useStudio } from './studio/studioStore';
 import { CrmShell } from './studio/CrmUI';
 
@@ -39,6 +39,7 @@ export default function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [chromeHidden, setChromeHidden] = useState(false);
   const [sceneH, setSceneH] = useState(defaultSceneH);
+  const [about, setAbout] = useState(false);
   const drag = useRef<{ y: number; h: number } | null>(null);
   // telefon: przewijanie w dół chowa nagłówek (scena przesuwa się w górę), w górę — przywraca
   useEffect(() => {
@@ -106,7 +107,7 @@ export default function App() {
       {/* telefon: pasek leży NAD treścią i chowa się transformacją — bez zmiany układu, więc nie przerywa przewijania */}
       <div className={`absolute inset-x-0 top-0 z-30 transition-transform duration-300 ease-out will-change-transform md:relative md:inset-auto md:shrink-0 md:translate-y-0 ${chromeHidden ? '-translate-y-full' : 'translate-y-0'}`} data-testid="topbar-wrap"><TopBar /></div>
       {/* telefon: scena przyklejona u góry, opcje przewijają się pod nią */}
-      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-14 md:flex-row md:overflow-visible md:pt-0" data-testid="scroller">
+      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain pt-14 md:flex-row md:overflow-visible md:pt-0" data-testid="scroller">
         {/* przyklejenie liczone od wnętrza przewijania (po pt-14): pod paskiem top-0, na samej górze -top-14; zmiana „top” nie zmienia układu ani przewinięcia */}
         <main className={`sticky z-20 h-[var(--scene-h,46vh)] shrink-0 bg-paper shadow-[0_10px_20px_-6px_rgba(0,0,0,0.28)] transition-[top] duration-300 ease-out md:relative md:top-auto md:z-auto md:h-auto md:min-h-0 md:min-w-0 md:flex-1 md:shrink md:shadow-none ${chromeHidden ? '-top-14' : 'top-0'}`}>
           <Suspense fallback={<div className="absolute inset-0 grid place-items-center text-[13px] text-muted">Ładowanie sceny 3D…</div>}>
@@ -114,10 +115,10 @@ export default function App() {
           </Suspense>
           <ProjectionFade />
           <div className="pointer-events-none absolute inset-x-3 top-2 flex justify-start md:top-3"><InfoBar /></div>
-          {/* telefon: po schowaniu górnego paska wjeżdża sam symbol design3d; stuknięcie przywraca pasek */}
-          <button type="button" aria-label="design3d — pokaż górny pasek" data-testid="floating-mark" tabIndex={chromeHidden ? 0 : -1}
-            onClick={() => { scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); setChromeHidden(false); }}
-            className={`absolute right-3 top-2 z-10 transition-all duration-300 ease-out md:hidden ${chromeHidden ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-16 opacity-0'}`}>
+          {/* telefon: po schowaniu górnego paska pojawia się sam symbol design3d; stuknięcie — okno „jak działa design3d” */}
+          <button type="button" aria-label="design3d — jak to działa" data-testid="floating-mark" tabIndex={chromeHidden ? 0 : -1}
+            onClick={() => setAbout(true)}
+            className={`absolute right-3 top-2 z-10 transition-all duration-300 ease-out md:hidden ${chromeHidden ? 'scale-100 opacity-100' : 'pointer-events-none scale-50 opacity-0'}`}>
             <img src={`${import.meta.env.BASE_URL}brand/design3d-mark.svg`} alt="design3d" width={36} height={36} className="h-9 w-9 rounded-[10px] shadow-[0_4px_14px_rgba(0,0,0,0.25)]" />
           </button>
           <div className="pointer-events-none absolute inset-x-3 bottom-2 flex flex-col items-start gap-2 md:bottom-3 md:items-center"><CommentComposer /><BottomBar /></div>
@@ -135,6 +136,7 @@ export default function App() {
       </div>
     </div>
     <ShareGate />
+    <AboutDialog open={about} onClose={() => setAbout(false)} onShowMenu={() => { scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); setChromeHidden(false); }} />
     {!gate && <CtaBar variant="mobile" />}
     </>
   );
