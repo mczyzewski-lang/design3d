@@ -3,9 +3,30 @@ import { create } from 'zustand';
 import { mergeWithDefaults } from '../engine/defaults';
 import type { Config, Vec3 } from '../engine/types';
 import { useStore } from '../store/store';
-import { api, type CommentDto, type ContractorDto, type ProjectListItem, type VersionInfo } from './api';
+import { api, type CommentDto, type ContractorDto, type ContractorForm, type ProjectListItem, type VersionInfo } from './api';
+import { capture } from '../three/capture';
 
 export type Role = 'local' | 'owner' | 'contractor' | 'none';
+
+/** Zrzut bieżącego widoku sceny (pomniejszony JPEG) jako podgląd projektu w bramce udostępnionego linku — bez blokowania zapisu. */
+function uploadThumbnail(id: string): void {
+  const src = capture.fn?.();
+  if (!src) return;
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 960 / img.width);
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * scale);
+    c.height = Math.round(img.height * scale);
+    const g = c.getContext('2d');
+    if (!g) return;
+    g.fillStyle = '#f3f0ea';
+    g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(img, 0, 0, c.width, c.height);
+    api.putThumbnail(id, c.toDataURL('image/jpeg', 0.85)).catch(() => { /* podgląd jest opcjonalny */ });
+  };
+  img.src = src;
+}
 
 interface StudioState {
   projectId: string | null;
@@ -20,7 +41,7 @@ interface StudioState {
   busy: boolean;
   error: string | null;
   /** udostępniony link bez dostępu — bramka nad rozmytym projektem */
-  gate: null | { token: string; name: string; consentText: string };
+  gate: null | { token: string; name: string; consentText: string; leadsText: string; thumb: string | null };
   comments: CommentDto[];
   commentMode: boolean;
   pendingPin: Vec3 | null;
@@ -35,7 +56,7 @@ interface StudioState {
   refreshProjects: () => Promise<void>;
   ensureShare: () => Promise<string | null>;
   ownerLink: () => Promise<string | null>;
-  register: (form: { firstName: string; lastName: string; email: string; phone: string; consent: boolean }) => Promise<string[] | null>;
+  register: (form: ContractorForm) => Promise<string[] | null>;
   continueAsOwner: () => Promise<boolean>;
   loadComments: () => Promise<void>;
   addComment: (text: string, pos: Vec3 | null) => Promise<boolean>;
@@ -85,7 +106,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           set({ role: 'contractor', viewerName: sh.viewer?.name ?? null });
           await get().loadComments();
         } else {
-          set({ role: 'none', gate: { token, name: sh.name, consentText: sh.consentText } });
+          set({ role: 'none', gate: { token, name: sh.name, consentText: sh.consentText, leadsText: sh.leadsText, thumb: sh.thumbnail ? api.thumbnailUrl(token, sh.thumbnail) : null } });
           useStore.getState().setView({ spin: true });
         }
         return;
@@ -126,10 +147,12 @@ export const useStudio = create<StudioState>((set, get) => ({
       if (s.role === 'owner' && s.projectId) {
         const p = await api.save(s.projectId, cfg(), s.version, name);
         set({ name: p.name, version: p.currentVersion, versions: p.versions, savedJson: json(cfg()) });
+        uploadThumbnail(p.id);
       } else {
         const p = await api.createProject(name ?? s.name, cfg());
         set({ projectId: p.id, name: p.name, version: p.currentVersion, versions: p.versions, role: 'owner', shareToken: null, savedJson: json(cfg()), comments: [] });
         history.replaceState(null, '', projectPath(p.id));
+        uploadThumbnail(p.id);
       }
       void get().refreshProjects();
       return true;
@@ -148,6 +171,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     try {
       const p = await api.saveVersion(s.projectId, cfg(), label);
       set({ version: p.currentVersion, versions: p.versions, savedJson: json(cfg()) });
+      uploadThumbnail(p.id);
       return true;
     } catch (e) {
       set({ error: (e as Error).message });

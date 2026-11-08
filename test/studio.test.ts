@@ -127,3 +127,41 @@ test('link właściciela przenosi prawa na inne urządzenie', async () => {
   assert.equal((await laptop(`/projects/${projectId}`)).status, 200);
   assert.equal((await laptop(`/shares/${shareToken}`)).body.role, 'owner');
 });
+
+test('podgląd projektu: zapis tylko przez właściciela, odczyt przez link udostępnienia', async () => {
+  // najmniejszy poprawny PNG 1×1 powiększony o metadane, żeby przekroczyć próg 100 B
+  const png = Buffer.concat([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64'), Buffer.alloc(120)]);
+  const image = `data:image/png;base64,${png.toString('base64')}`;
+  assert.equal((await stranger(`/projects/${projectId}/thumbnail`, { method: 'PUT', body: { image } })).status, 403);
+  assert.equal((await owner(`/projects/${projectId}/thumbnail`, { method: 'PUT', body: { image: 'data:text/html;base64,PGI+' } })).status, 400);
+  assert.equal((await owner(`/projects/${projectId}/thumbnail`, { method: 'PUT', body: { image } })).status, 200);
+  const sh = await stranger(`/shares/${shareToken}`);
+  assert.ok(sh.body.thumbnail, 'bramka wie, że jest podgląd');
+  assert.match(sh.body.leadsText, /zapytania o wyceny/);
+  const res = await fetch(`${base}/shares/${shareToken}/thumbnail`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  assert.equal(Buffer.from(await res.arrayBuffer()).length, png.length);
+  assert.equal((await fetch(`${base}/shares/nieistnieje/thumbnail`)).status, 404);
+});
+
+test('rejestracja firmy: zgoda na zapytania z okolicy wymaga kodu pocztowego i promienia', async () => {
+  const lead = browser();
+  const form = { firstName: 'Ewa', lastName: 'Nowak', email: 'ewa@schody-nowak.pl', phone: '601 200 300', consent: true, leads: true };
+  const bad = await lead(`/shares/${shareToken}/contractor`, { method: 'POST', body: { ...form, postalCode: '123', radiusKm: 1000 } });
+  assert.equal(bad.status, 400);
+  assert.ok(bad.body.errors.some((e: string) => /kod pocztowy/.test(e)));
+  assert.ok(bad.body.errors.some((e: string) => /promień/.test(e)));
+  const ok = await lead(`/shares/${shareToken}/contractor`, { method: 'POST', body: { ...form, postalCode: '30 061', radiusKm: '40' } });
+  assert.equal(ok.status, 200);
+  const row = get(`SELECT leads_opt_in, postal_code, radius_km, leads_consent_text, leads_consent_at FROM studio_contractors WHERE email = ?`, 'ewa@schody-nowak.pl')!;
+  assert.equal(row.leads_opt_in, 1);
+  assert.equal(row.postal_code, '30-061');
+  assert.equal(row.radius_km, 40);
+  assert.match(row.leads_consent_text, /bezpłatnie/);
+  assert.ok(row.leads_consent_at);
+  // bez zaznaczenia: kod i promień nie są wymagane, a wcześniejsza zgoda zostaje wycofana
+  const again = await browser()(`/shares/${shareToken}/contractor`, { method: 'POST', body: { ...form, leads: false } });
+  assert.equal(again.status, 200);
+  assert.equal(get(`SELECT leads_opt_in, postal_code FROM studio_contractors WHERE email = ?`, 'ewa@schody-nowak.pl')!.leads_opt_in, 0);
+});

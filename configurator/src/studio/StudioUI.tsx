@@ -263,11 +263,13 @@ export function ShareGate() {
   const register = useStudio((s) => s.register);
   const continueAsOwner = useStudio((s) => s.continueAsOwner);
   const [who, setWho] = useState<'pick' | 'owner' | 'contractor'>('pick');
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', consent: false });
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', consent: false, leads: false, postalCode: '', radiusKm: '30' });
+  const [thumbOk, setThumbOk] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [ownerMsg, setOwnerMsg] = useState<string | null>(null);
   if (!gate) return null;
+  const thumb = gate.thumb && thumbOk ? gate.thumb : null;
   const field = (k: 'firstName' | 'lastName' | 'email' | 'phone', label: string, type = 'text', auto = '') => (
     <label className="block">
       <span className="text-[11.5px] text-muted">{label}</span>
@@ -275,11 +277,24 @@ export function ShareGate() {
     </label>
   );
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-[#f7f5f1]/30 p-4" data-testid="share-gate">
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-[#f7f5f1]/30" data-testid="share-gate">
+      <div className="flex min-h-full items-center justify-center p-4">
       <motion.div initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-md rounded-3xl bg-white/95 p-6 shadow-2xl backdrop-blur">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Stair Studio · design3d.pl</div>
-        <div className="mt-1 text-[19px] font-semibold leading-tight">Udostępniono Ci projekt schodów</div>
-        <div className="mt-0.5 text-[13px] text-muted">„{gate.name}”</div>
+        {/* podgląd projektu: duży przy wyborze, mały przy formularzu */}
+        {thumb && who === 'pick' && (
+          <img src={thumb} alt={`Podgląd projektu „${gate.name}”`} data-testid="gate-thumb-large" onError={() => setThumbOk(false)}
+            className="mb-4 aspect-[16/10] w-full rounded-2xl bg-paper object-cover ring-1 ring-line" />
+        )}
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Stair Studio · design3d.pl</div>
+            <div className="mt-1 text-[19px] font-semibold leading-tight">Udostępniono Ci projekt schodów</div>
+            <div className="mt-0.5 truncate text-[13px] text-muted">„{gate.name}”</div>
+          </div>
+          {thumb && who !== 'pick' && (
+            <img src={thumb} alt="" data-testid="gate-thumb-small" onError={() => setThumbOk(false)} className="h-16 w-24 shrink-0 rounded-xl bg-paper object-cover ring-1 ring-line" />
+          )}
+        </div>
         {who === 'pick' && (
           <div className="mt-5 grid gap-2.5">
             <button type="button" data-testid="gate-owner" onClick={async () => { setWho('owner'); setOwnerMsg(null); if (!(await continueAsOwner())) setOwnerMsg('Na tym urządzeniu nie ma aktywnej sesji właściciela. Otwórz projekt na urządzeniu, na którym go zapisałeś, albo użyj „Linku właściciela” z menu Zapisz ▾.'); }}
@@ -306,6 +321,25 @@ export function ShareGate() {
               <input data-testid="gate-consent" type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5" />
               <span>{gate.consentText}</span>
             </label>
+            <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
+              <input data-testid="gate-leads" type="checkbox" checked={form.leads} onChange={(e) => setForm({ ...form, leads: e.target.checked })} className="mt-0.5" />
+              <span><span className="font-medium text-ink">{gate.leadsText}</span> <span className="text-muted">(dobrowolne, możesz zrezygnować w każdej chwili)</span></span>
+            </label>
+            {form.leads && (
+              <div className="grid grid-cols-2 gap-2.5 rounded-xl bg-paper p-2.5">
+                <label className="block">
+                  <span className="text-[11.5px] text-muted">Kod pocztowy</span>
+                  <input data-testid="gate-postalCode" required inputMode="numeric" autoComplete="postal-code" placeholder="00-000" maxLength={6} value={form.postalCode}
+                    onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setForm({ ...form, postalCode: d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d }); }}
+                    className="mt-0.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13.5px] outline-none focus:border-oak" />
+                </label>
+                <label className="block">
+                  <span className="text-[11.5px] text-muted">Promień (km)</span>
+                  <input data-testid="gate-radiusKm" required type="number" inputMode="numeric" min={5} max={300} step={5} value={form.radiusKm} onChange={(e) => setForm({ ...form, radiusKm: e.target.value })}
+                    className="mt-0.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13.5px] outline-none focus:border-oak" />
+                </label>
+              </div>
+            )}
             {errors.length > 0 && <div className="rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad" data-testid="gate-errors">{errors.join('. ')}</div>}
             <button type="submit" data-testid="gate-submit" disabled={busy} className="mt-1 rounded-2xl bg-ink py-3 text-[14px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
               {busy ? 'Chwileczkę…' : 'Zobacz i wyceń projekt schodów'}
@@ -314,6 +348,7 @@ export function ShareGate() {
           </form>
         )}
       </motion.div>
+      </div>
     </div>
   );
 }

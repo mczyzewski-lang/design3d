@@ -81,3 +81,11 @@ CREATE TABLE IF NOT EXISTS studio_comments (
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_studio_comments_project ON studio_comments(project_id, id);
+
+-- podgląd projektu (zrzut sceny) do bramki udostępnionego linku
+CREATE TABLE IF NOT EXISTS studio_thumbnails (
+  project_id TEXT PRIMARY KEY REFERENCES studio_projects(id) ON DELETE CASCADE,
+  mime       TEXT NOT NULL,
+  data       BLOB NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
