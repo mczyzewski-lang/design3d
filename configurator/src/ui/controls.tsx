@@ -97,7 +97,7 @@ export function Section({ index, title, open, onToggle, children, value, testId 
       const scroller = el?.closest('[data-testid="scroller"]') as HTMLElement | null;
       const main = document.querySelector('main')?.getBoundingClientRect();
       if (!el || !scroller || !main) return;
-      const delta = el.getBoundingClientRect().top - main.bottom;
+      const delta = el.getBoundingClientRect().top - main.bottom - 8; // 8 px odstępu karty od sceny
       if (Math.abs(delta) <= 2) return;
       document.documentElement.dataset.autoscroll = '1';
       scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: smooth ? 'smooth' : 'auto' });
@@ -109,17 +109,22 @@ export function Section({ index, title, open, onToggle, children, value, testId 
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); delete document.documentElement.dataset.autoscroll; };
   }, [open]);
   return (
-    <div ref={ref} className="scroll-mt-[calc(var(--scene-h,46vh)+var(--chrome-h,56px))] border-t border-line md:scroll-mt-0" data-testid={testId}>
-      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line text-[10.5px] text-muted">{index}</span>
-        <span className="flex-1 text-[13px] font-medium tracking-tight">{title}</span>
-        {value && !open && <span className="max-w-[45%] truncate text-[11.5px] text-muted">{value}</span>}
-        <ChevronDown size={16} className={`text-muted transition ${open ? 'rotate-180' : ''}`} />
+    // zamknięte segmenty lekko wypukłe (białe, z cieniem), otwarty — wklęsły (ciemniejsze tło, cień wewnętrzny)
+    <div ref={ref} data-open={open || undefined}
+      className={`mx-2.5 mt-2 scroll-mt-[calc(var(--scene-h,46vh)+var(--chrome-h,56px)+8px)] rounded-xl border transition-[background-color,box-shadow,border-color] duration-200 md:mx-3 md:scroll-mt-0 ${open
+        ? 'border-ink/10 bg-[#efebe4] shadow-[inset_0_2px_5px_rgba(20,19,17,0.10),inset_0_1px_1px_rgba(20,19,17,0.08)]'
+        : 'border-line bg-white shadow-[0_1px_2px_rgba(20,19,17,0.06),0_3px_8px_-2px_rgba(20,19,17,0.07),inset_0_1px_0_rgba(255,255,255,0.9)] hover:border-ink/20'}`}
+      data-testid={testId}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
+        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10.5px] ${open ? 'border-oak bg-oak text-white' : 'border-line text-muted'}`}>{index}</span>
+        <span className={`flex-1 text-[15px] tracking-tight md:text-[13px] ${open ? 'font-semibold' : 'font-medium'}`} data-testid="section-title">{title}</span>
+        {value && !open && <span className="max-w-[45%] truncate text-[12.5px] text-muted md:text-[11.5px]">{value}</span>}
+        <ChevronDown size={16} className={`shrink-0 text-muted transition ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="overflow-hidden">
-            <div className="px-4 pb-4">{children}</div>
+            <div className="px-3.5 pb-4">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -160,7 +165,7 @@ export function Choices({ children, cols = 4, item = 'md', testId }: { children:
 /** Podtytuł grupy sekcji w panelu. */
 export function GroupLabel({ children, hint }: { children: ReactNode; hint?: string }) {
   return (
-    <div className="border-t border-line bg-paper/70 px-4 pb-1.5 pt-3">
+    <div className="px-4 pb-0.5 pt-4">
       <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{children}</div>
       {hint && <div className="text-[11px] text-muted/90">{hint}</div>}
     </div>
