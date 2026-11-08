@@ -44,7 +44,7 @@ export default function App() {
       <TopBar />
       {/* telefon: scena przyklejona u góry, opcje przewijają się pod nią */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:flex-row md:overflow-visible">
-        <main className="sticky top-0 z-20 h-[46vh] min-h-[300px] shrink-0 bg-paper md:relative md:z-auto md:h-auto md:min-h-0 md:min-w-0 md:flex-1 md:shrink">
+        <main className="sticky top-0 z-20 h-[46vh] min-h-[300px] shrink-0 bg-paper shadow-[0_10px_20px_-6px_rgba(0,0,0,0.28)] md:relative md:shadow-none md:z-auto md:h-auto md:min-h-0 md:min-w-0 md:flex-1 md:shrink">
           <Suspense fallback={<div className="absolute inset-0 grid place-items-center text-[13px] text-muted">Ładowanie sceny 3D…</div>}>
             <Scene />
           </Suspense>

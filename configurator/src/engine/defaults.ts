@@ -62,7 +62,7 @@ export const DEFAULT_CONFIG: Config = {
     separateColor: false,
     color: '#141414',
   },
-  lighting: { led: true, ledTemp: 2700, ledBrightness: 0.6, night: false },
+  lighting: { led: true, ledMode: 'nosing', ledTemp: 2700, ledBrightness: 0.6, night: false },
 };
 
 export function cloneConfig(c: Config): Config {

@@ -205,6 +205,9 @@ export function CommentComposer() {
 export function CommentsCard() {
   const st = useStudio();
   const [text, setText] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  // rozwiń przy wskazaniu komentarza na modelu
+  useEffect(() => { if (st.activeComment) setExpanded(true); }, [st.activeComment]);
   useEffect(() => {
     if (st.role !== 'owner' && st.role !== 'contractor') return;
     const t = setInterval(() => { if (!document.hidden) void useStudio.getState().loadComments(); }, 15000);
@@ -216,13 +219,17 @@ export function CommentsCard() {
   if (st.role === 'none') return null;
   const open = st.comments.filter((c) => !c.resolved).length;
   return (
-    <div className="mx-3 mb-3 rounded-2xl border border-line bg-white p-4" data-testid="comments-card">
+    <div className={`mx-3 mb-3 rounded-2xl border border-line bg-white ${expanded ? 'p-4' : 'px-4 py-2'}`} data-testid="comments-card">
       <div className="flex items-center justify-between">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Komentarze {st.comments.length ? `(${open} otwarte)` : ''}</div>
+        <button type="button" data-testid="comments-toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted hover:text-ink">
+          Komentarze {st.comments.length ? `(${open} otwarte)` : ''}
+          <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
         <button type="button" data-testid="comment-mode" onClick={() => st.setCommentMode(!st.commentMode)} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] ${st.commentMode ? 'bg-oak text-white' : 'border border-line hover:border-oak'}`}>
           <MessageCirclePlus size={13} /> Przypnij w 3D
         </button>
       </div>
+      {expanded && (<>
       {st.comments.length === 0 && <p className="mt-2 text-[12px] text-muted">{st.role === 'local' ? 'Komentarze zapisują się w projekcie — pierwszy komentarz zapisze projekt.' : 'Brak komentarzy. Przypnij uwagę w konkretnym miejscu schodów.'}</p>}
       <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto scrollbar-thin">
         {st.comments.map((c, i) => (
@@ -244,6 +251,7 @@ export function CommentsCard() {
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Komentarz ogólny…" className="min-w-0 flex-1 rounded-lg border border-line px-3 py-1.5 text-[12.5px] outline-none focus:border-oak" />
         <button type="submit" className="rounded-lg border border-line px-2.5 text-muted hover:text-ink" aria-label="Wyślij"><Send size={14} /></button>
       </form>
+      </>)}
     </div>
   );
 }

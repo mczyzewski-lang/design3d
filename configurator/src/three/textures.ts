@@ -10,7 +10,7 @@ function tex(c: HTMLCanvasElement, repeat: [number, number], srgb = true): THREE
   t.wrapS = THREE.RepeatWrapping;
   t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeat[0], repeat[1]);
-  t.anisotropy = 8;
+  t.anisotropy = 16; // przycinane do możliwości GPU — ostrzejsze słoje pod kątem
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.needsUpdate = true;
   return t;

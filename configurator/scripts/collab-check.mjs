@@ -93,6 +93,7 @@ await f.click('[data-testid="gate-submit"]');
 await f.waitForSelector('[data-testid="share-gate"]', { state: 'detached' });
 ok(true, 'po rejestracji: „Zobacz i wyceń projekt schodów” otwiera projekt');
 await f.waitForSelector('.pin-label.pin-owner');
+await f.click('[data-testid="comments-toggle"]'); // lista komentarzy jest domyślnie zwinięta
 ok((await f.locator('text=Czy tu może być szkło').count()) > 0, 'firma widzi komentarz właściciela');
 await f.fill('[data-testid="comments-card"] input', 'Wycena: ok. 28 000 zł netto, termin 6 tygodni.');
 await f.press('[data-testid="comments-card"] input', 'Enter');
@@ -107,6 +108,8 @@ ok((await f.locator('[data-testid="share-gate"]').count()) === 0, 'aktywna sesja
 // ---- właściciel widzi odpowiedź i firmę ----
 await o.reload({ waitUntil: 'networkidle' });
 await o.waitForTimeout(1500);
+await o.waitForSelector('[data-testid="comments-card"]', { timeout: 90000 }); // projekt właściciela wczytuje się po przeładowaniu
+await o.click('[data-testid="comments-toggle"]');
 ok((await o.locator('text=Wycena: ok. 28 000').count()) > 0, 'właściciel widzi komentarz firmy');
 await o.click('[data-testid="share-project"]');
 await o.waitForSelector('text=Firmy, które otworzyły projekt');

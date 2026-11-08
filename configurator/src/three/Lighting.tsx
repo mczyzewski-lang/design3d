@@ -4,8 +4,11 @@ import { useThree } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Config, Solved } from '../engine/types';
+import { stepStyleOf } from '../engine/catalog';
+import { ledLightPositions } from './geom/led';
+import { stairGeometryKey } from './geom/stair';
 
-export function Lighting({ config, solved }: { config: Config; solved: Solved }) {
+export function Lighting({ config, solved, hq = true }: { config: Config; solved: Solved; hq?: boolean }) {
   const { room, lighting } = config;
   const night = lighting.night;
   const W = room.width;
@@ -26,13 +29,11 @@ export function Lighting({ config, solved }: { config: Config; solved: Solved })
     cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r; cam.near = 0.5; cam.far = 40;
     cam.updateProjectionMatrix();
   }, [W, D, H]);
-  // ciepłe światło od taśm LED w nocy: jedno źródło na bieg
-  const ledLights = useMemo(() => solved.layout.spiral
-    ? [[solved.layout.spiral.center.x, H * 0.45, solved.layout.spiral.center.z] as [number, number, number]]
-    : solved.layout.flights.map((f) => {
-    const mid = f.length / 2;
-    return [f.origin.x + f.dir.x * mid, f.baseY + (f.topY - f.baseY) / 2 - 0.2, f.origin.z + f.dir.z * mid] as [number, number, number];
-  }), [solved.layout, H]);
+  // ciepłe światło od LED: kilka źródeł rozłożonych wzdłuż każdego biegu, wg rodzaju oprawy
+  const t = stepStyleOf(config) === 'blocks' ? solved.calc.rise - 0.014 : config.stairs.treadThickness;
+  const ledKey = stairGeometryKey(config, solved);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ledLights = useMemo(() => ledLightPositions(config, solved, t), [ledKey]);
   const ledColor = lighting.ledTemp === 2700 ? '#ffb46b' : '#ffe2c2';
   return (
     <>
@@ -44,14 +45,18 @@ export function Lighting({ config, solved }: { config: Config; solved: Solved })
         intensity={night ? 0 : 2.4}
         color="#fff4e2"
         shadow-mapSize={[2048, 2048]}
+        shadow-radius={hq ? 3 : 2}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
       />
       {night && <pointLight position={[W / 2, H - 0.4, D / 2]} intensity={2.5} distance={8} color="#ffd9a8" />}
-      {lighting.led && ledLights.map((p, i) => (
-        <pointLight key={i} position={p} intensity={(night ? 4 : 0.6) * lighting.ledBrightness} distance={3.5} decay={2} color={ledColor} />
+      {/* światła LED tylko nocą — w dzień ich wkład jest znikomy, a każde źródło kosztuje (szczególnie na telefonach) */}
+      {lighting.led && night && ledLights.map((p, i) => (
+        <pointLight key={i} position={p} intensity={2.6 * lighting.ledBrightness} distance={2.6} decay={2} color={ledColor} />
       ))}
-      <Environment resolution={256} environmentIntensity={night ? 0.12 : 0.9} background={false} frames={1}>
+      <Environment resolution={256} environmentIntensity={night ? 0.12 : 0.75} background={false} frames={1}>
+        {/* jasne, ciepłe tło otoczenia: metal (np. szampański, szczotkowany) odbija wnętrze zamiast czerni */}
+        <color attach="background" args={['#5f584e']} />
         <Lightformer form="rect" intensity={2.2} color="#fffaf2" position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[12, 12, 1]} />
         <Lightformer form="rect" intensity={1.2} color="#fff1dd" position={[8, 3, 2]} rotation-y={-Math.PI / 2} scale={[10, 4, 1]} />
         <Lightformer form="rect" intensity={0.8} color="#eef3ff" position={[-8, 3, -2]} rotation-y={Math.PI / 2} scale={[10, 4, 1]} />

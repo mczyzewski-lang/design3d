@@ -149,7 +149,7 @@ export const RISER_FINISHES: Array<{ key: RiserFinish; label: string }> = [
 ];
 
 export const STEP_STYLES: Array<{ key: StepStyle; label: string; hint: string }> = [
-  { key: 'open', label: 'Ażurowe', hint: 'Otwarte — bez podstopnic, widoczna konstrukcja stalowa.' },
+  { key: 'open', label: 'Ażurowe', hint: 'Otwarte — bez podstopnic, widoczna konstrukcja nośna.' },
   { key: 'closedFront', label: 'Zabudowane od frontu', hint: 'Podstopnice zamykają front każdego stopnia; konstrukcja widoczna z boku.' },
   { key: 'boxed', label: 'Zabudowane z podbitką', hint: 'Podstopnice + okładzina boków i spodu wzdłuż biegu — konstrukcja ukryta.' },
   { key: 'solid', label: 'Pełna zabudowa do posadzki', hint: 'Schody jako bryła do podłogi — miejsce na schowek lub szafę pod schodami.' },

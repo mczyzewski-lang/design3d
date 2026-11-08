@@ -1,6 +1,7 @@
 // Scena 3D — ładowana leniwie (three w osobnym chunku).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
+import { useIsMobile } from '../ui/useIsMobile';
 import { useConfig, useSolved, useView } from '../store/store';
 import { createMaterials, updateMaterials } from './materials';
 import { Room } from './Room';
@@ -45,14 +46,15 @@ export default function Scene() {
     e.stopPropagation();
     setPendingPin({ x: e.point.x, y: e.point.y, z: e.point.z });
   };
+  const mobile = useIsMobile();
   const dimView: DimView | null = !view.showDims ? null : view.camera === 'top' ? 'top' : view.camera === 'side' ? 'side' : view.camera === 'eye' ? null : 'persp';
 
   return (
     <div className={`absolute inset-0 ${commentMode ? 'cursor-crosshair' : ''}`}>
-      <Canvas shadows="percentage" gl={{ antialias: true, preserveDrawingBuffer: false }} dpr={[1, 2]} data-testid="stair-canvas">
+      <Canvas shadows="percentage" gl={{ antialias: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' }} dpr={[1, 2]} data-testid="stair-canvas">
         <LabelContext.Provider value={layer}>
           <CameraRig config={config} solved={solved} view={view} />
-          <Lighting config={config} solved={solved} />
+          <Lighting config={config} solved={solved} hq={!mobile} />
           <group onClick={pick}>
             <Room config={config} solved={solved} view={view} mats={mats} />
             <Staircase config={config} solved={solved} mats={mats} />

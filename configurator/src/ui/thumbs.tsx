@@ -48,15 +48,17 @@ export function RailingThumb({ type }: { type: RailingType }) {
 }
 
 /** Mała elewacja 3 stopni dla stylu stopni. */
-export function StepStyleThumb({ style }: { style: StepStyle }) {
+export function StepStyleThumb({ style, material = 'steel' }: { style: StepStyle; material?: 'steel' | 'wood' | 'concrete' }) {
   const wood = '#b8874f';
   const clad = 'currentColor';
   const steps = [0, 1, 2];
+  const struct = material === 'wood' ? '#8a6640' : 'currentColor';
   return (
     <svg viewBox="0 0 36 28" className="h-6 w-8 shrink-0">
       {style === 'solid' && <path d="M3 26 V22 H13 V15 H23 V8 H33 V26 Z" fill={clad} opacity="0.25" />}
       {style === 'boxed' && <path d="M3 26 V22 H13 V15 H23 V8 H33 V14 L9 26 Z" fill={clad} opacity="0.25" />}
-      {style === 'open' || style === 'closedFront' ? <line x1="4" y1="27" x2="33" y2="10" stroke="currentColor" strokeWidth="2" /> : null}
+      {material === 'concrete' && (style === 'open' || style === 'closedFront' || style === 'blocks') && <path d="M3 26 V22 H13 V15 H23 V8 H33 V14 L9 26 Z" fill="#a9a6a0" />}
+      {material !== 'concrete' && (style === 'open' || style === 'closedFront') ? <line x1="4" y1="27" x2="33" y2="10" stroke={struct} strokeWidth={material === 'wood' ? 3 : 2} /> : null}
       {steps.map((i) => (style === 'blocks'
         ? <rect key={i} x={3 + i * 10} y={19 - i * 7} width="11" height="7" fill={wood} />
         : <rect key={i} x={3 + i * 10} y={20 - i * 7} width="11" height="2.2" fill={wood} />))}

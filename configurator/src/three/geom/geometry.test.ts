@@ -347,3 +347,41 @@ describe('konstrukcje drewniana i betonowa', () => {
     expect(new Set(sig).size).toBe(7);
   });
 });
+
+describe('oświetlenie LED i zabudowa przy różnych konstrukcjach', () => {
+  test('tryby LED: taśma pod noskami, oprawy punktowe, profil wzdłuż biegu', () => {
+    const tags = (mode: 'nosing' | 'spots' | 'along') => {
+      const c = cfg((x) => { x.lighting.ledMode = mode; });
+      return buildStairGeometry(c, solve(c)).meta.tags;
+    };
+    const n = tags('nosing');
+    expect(n.led).toBeGreaterThan(18);
+    const sp = tags('spots');
+    expect(sp.led ?? 0).toBe(0);
+    expect(sp.ledSpot).toBe(2 * 5); // 2 biegi × 9 stopni → stopnie 1,3,5,7,9
+    const al = tags('along');
+    expect(al.ledAlong).toBe(2);
+    expect(al.led ?? 0).toBe(0);
+  });
+  test('światła LED rozłożone wzdłuż biegu (nie jedno źródło)', async () => {
+    const { ledLightPositions } = await import('./led');
+    for (const mode of ['nosing', 'spots', 'along'] as const) {
+      const c = cfg((x) => { x.lighting.ledMode = mode; });
+      expect(ledLightPositions(c, solve(c), c.stairs.treadThickness).length).toBe(6);
+    }
+  });
+  test('podbitka przylega do spodu konstrukcji (bez stałego naddatku)', async () => {
+    const { structureDrop } = await import('./stair');
+    const s = solve(DEFAULT_CONFIG);
+    const f = s.layout.flights[0];
+    const t = DEFAULT_CONFIG.stairs.treadThickness;
+    expect(structureDrop('woodStringers', f, t)).toBeLessThan(0.15);
+    expect(structureDrop('centralBeam', f, t)).toBeGreaterThan(0.25);
+    const c = cfg((x) => { x.structure.type = 'woodStringers'; x.treads.style = 'boxed'; });
+    const g = buildStairGeometry(c, solve(c));
+    expect(g.meta.tags.sidePanel ?? 0).toBe(0); // policzki drewniane są bokiem
+    expect(g.meta.tags.soffit).toBeGreaterThanOrEqual(2);
+    const c2 = cfg((x) => { x.structure.type = 'woodStringers'; x.treads.style = 'solid'; });
+    expect(buildStairGeometry(c2, solve(c2)).meta.tags.solidCore).toBe(2);
+  });
+});

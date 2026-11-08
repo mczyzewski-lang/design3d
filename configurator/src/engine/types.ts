@@ -114,8 +114,12 @@ export interface RailingConfig {
   color: string;
 }
 
+/** nosing = taśma pod noskami, spots = oprawy punktowe, along = profil wzdłuż biegu */
+export type LedMode = 'nosing' | 'spots' | 'along';
+
 export interface LightingConfig {
   led: boolean;
+  ledMode: LedMode;
   ledTemp: 2700 | 4000;
   ledBrightness: number; // 0..1
   night: boolean;

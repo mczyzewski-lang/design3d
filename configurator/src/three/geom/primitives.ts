@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import type { FlightEl } from '../../engine/types';
 
 export type MatKey = 'steel' | 'wood' | 'concrete' | 'riser' | 'led' | 'railSteel' | 'railWood' | 'glass' | 'glassEdge' | 'perforated' | 'mesh';
 
@@ -232,4 +233,11 @@ export function extrudePlan(poly: Array<{ x: number; z: number }>, y0: number, y
   g.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1));
   g.translate(0, y1, 0);
   return meterUV(g, uvOff[0], uvOff[1]);
+}
+
+/** Macierz układu biegu: x = lewa ręka, y = góra, z = kierunek marszu; początek na linii pierwszego podnoszenia. */
+export function flightMatrix(f: FlightEl): THREE.Matrix4 {
+  const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(f.left.x, 0, f.left.z), new THREE.Vector3(0, 1, 0), new THREE.Vector3(f.dir.x, 0, f.dir.z));
+  m.setPosition(f.origin.x, f.baseY, f.origin.z);
+  return m;
 }

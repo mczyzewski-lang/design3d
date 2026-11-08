@@ -1,7 +1,7 @@
 // Prawy panel: karta analizy + zwijane sekcje 1–8.
 import { useMemo, useState } from 'react';
 import { ArrowRight, Braces } from 'lucide-react';
-import { STEP_STYLES, stepStyleOf, ENTRY_LABEL, FINISHES, GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, RISER_FINISHES, LANDING_SUPPORTS, RAILINGS, SHAPE_LABEL, STEEL_PRESETS, STRUCTURES, SUPPORT_TAG_LABEL, WALL_LABEL, WOODS, railingSpec, structureSpec } from '../engine/catalog';
+import { STEP_STYLES, stepStyleOf, ENTRY_LABEL, FINISHES, GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, RISER_FINISHES, LANDING_SUPPORTS, RAILINGS, SHAPE_LABEL, STEEL_PRESETS, STRUCTURES, SUPPORT_TAG_LABEL, WALL_LABEL, WOODS, railingSpec, structureMaterial, structureSpec } from '../engine/catalog';
 import { cm } from '../engine/validate';
 import { quantities } from '../engine/quantities';
 import type { EntryDir, SideMode, WallKey } from '../engine/types';
@@ -10,6 +10,7 @@ import { woodSwatch } from '../three/woodCanvas';
 import { AnalysisCard } from './AnalysisCard';
 import { CommentsCard } from '../studio/StudioUI';
 import { Field, Section, Segmented, SliderField, Thumb, Toggle } from './controls';
+import { LED_MODES } from '../engine/led';
 import { RailingThumb, ShapeThumb, StepStyleThumb, StructureThumb } from './thumbs';
 import { downloadJson, exportPayload } from './fileOps';
 
@@ -201,11 +202,24 @@ function StructureSection() {
   );
 }
 
+/** Etykiety stylu stopni dopasowane do materiału konstrukcji (beton nie bywa ażurowy). */
+function stepLabel(k: string, label: string, mat: string): string {
+  if (mat === 'concrete' && k === 'open') return 'Czoła betonowe';
+  return label;
+}
+function stepHint(k: string, hint: string, mat: string): string {
+  if (mat === 'concrete' && k === 'open') return 'Stopnice na betonowych stopniach, czoła stopni betonowe (do malowania lub tynku).';
+  if (mat === 'concrete' && k === 'closedFront') return 'Czoła betonowych stopni obłożone podstopnicami.';
+  if (mat === 'wood' && k === 'open') return 'Otwarte — bez podstopnic, widoczne policzki drewniane.';
+  return hint;
+}
+
 function TreadsSection() {
   const c = useConfig();
   const setTreads = useStore((s) => s.setTreads);
   const setStructure = useStore((s) => s.setStructure);
   const style = stepStyleOf(c);
+  const mat = structureMaterial(c.structure.type);
   const setStairs = useStore((s) => s.setStairs);
   const setLighting = useStore((s) => s.setLighting);
   const swatches = useMemo(() => Object.fromEntries(WOODS.map((w) => [w.key, woodSwatch(w.key)])), []);
@@ -215,13 +229,13 @@ function TreadsSection() {
         <Field label="Styl stopni">
           <div className="grid grid-cols-2 gap-1.5">
             {STEP_STYLES.map((st) => (
-              <button key={st.key} type="button" data-testid={`step-${st.key}`} title={st.hint} onClick={() => { setTreads({ style: st.key }); setStructure({ closedRisers: false }); }}
+              <button key={st.key} type="button" data-testid={`step-${st.key}`} title={stepHint(st.key, st.hint, mat)} onClick={() => { setTreads({ style: st.key }); setStructure({ closedRisers: false }); }}
                 className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-[11.5px] leading-tight ${style === st.key ? 'border-oak bg-oak-soft/60' : 'border-line'}`}>
-                <StepStyleThumb style={st.key} />{st.label}
+                <StepStyleThumb style={st.key} material={mat} />{stepLabel(st.key, st.label, mat)}
               </button>
             ))}
           </div>
-          <p className="mt-1 text-[11px] text-muted">{STEP_STYLES.find((x) => x.key === style)!.hint}</p>
+          <p className="mt-1 text-[11px] text-muted">{stepHint(style, STEP_STYLES.find((x) => x.key === style)!.hint, mat)}</p>
         </Field>
       )}
       {(style === 'closedFront' || style === 'boxed' || style === 'solid') && (
@@ -242,7 +256,7 @@ function TreadsSection() {
       <Field label="Krawędź">
         <Segmented value={c.treads.edge} onChange={(v) => setTreads({ edge: v })} options={[{ value: 'square', label: 'Prosta' }, { value: 'rounded', label: 'Zaokrąglona' }]} />
       </Field>
-      <Toggle label="Taśma LED pod noskiem" checked={c.lighting.led} onChange={(v) => setLighting({ led: v })} />
+      <Toggle label={c.lighting.ledMode === 'nosing' || c.stairs.shape === 'S' ? 'Taśma LED pod noskiem' : 'Oświetlenie LED (rodzaj w sekcji Oświetlenie)'} checked={c.lighting.led} onChange={(v) => setLighting({ led: v })} />
     </div>
   );
 }
@@ -361,7 +375,13 @@ function LightingSection() {
       <Field label="Pora">
         <Segmented value={L.night ? 'night' : 'day'} onChange={(v) => setLighting({ night: v === 'night' })} options={[{ value: 'day', label: 'Dzień' }, { value: 'night', label: 'Noc' }]} />
       </Field>
-      <Toggle label="Taśma LED pod stopniami" checked={L.led} onChange={(v) => setLighting({ led: v })} />
+      <Toggle label="Oświetlenie LED schodów" checked={L.led} onChange={(v) => setLighting({ led: v })} />
+      {L.led && c.stairs.shape !== 'S' && (
+        <Field label="Rodzaj oświetlenia">
+          <Segmented value={L.ledMode} onChange={(v) => setLighting({ ledMode: v })} size="sm" options={LED_MODES.map((m) => ({ value: m.key, label: <span data-testid={`led-${m.key}`}>{m.label}</span>, title: m.hint }))} />
+          <p className="mt-1 text-[11px] text-muted">{LED_MODES.find((m) => m.key === L.ledMode)?.hint}</p>
+        </Field>
+      )}
       <Field label="Barwa LED">
         <Segmented value={L.ledTemp} onChange={(v) => setLighting({ ledTemp: v })} options={[{ value: 2700, label: 'Ciepła 2700 K' }, { value: 4000, label: 'Neutralna 4000 K' }]} />
       </Field>

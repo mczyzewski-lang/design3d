@@ -300,3 +300,15 @@ describe('osobny odstęp z lewej i prawej', () => {
     expect(qw.find((q) => q.name.startsWith('Policzki drewniane'))?.group).toBe('Drewno');
   });
 });
+
+describe('LED w zestawieniu', () => {
+  test('oprawy w szt., profil w mb, stare konfiguracje = taśma pod noskami', () => {
+    const q = (mode: 'nosing' | 'spots' | 'along') => { const c = cloneConfig(DEFAULT_CONFIG); c.lighting.ledMode = mode; return quantities(c, solve(c)).filter((x) => x.group === 'Oświetlenie'); };
+    expect(q('spots').find((x) => x.unit === 'szt.')?.qty).toBe(10);
+    expect(q('along').find((x) => x.name.startsWith('Profil LED'))!.qty).toBeGreaterThan(3);
+    expect(q('nosing')[0].name).toMatch(/pod noskami/);
+    const old = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    delete old.lighting.ledMode;
+    expect(mergeWithDefaults(old).lighting.ledMode).toBe('nosing');
+  });
+});
