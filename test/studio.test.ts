@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import { setupTestEnv } from './helpers/env.ts';
 import { createApp } from '../src/app.ts';
-import { get } from '../src/db/index.ts';
+import { all, get } from '../src/db/index.ts';
 
 let server: Server;
 let base = '';
@@ -400,4 +400,22 @@ test('CRM: zmiana etapu nie kasuje kwoty, historia szansy i powiadomienia (z lic
   await firm('/contractor/notifications/seen', { method: 'POST' });
   assert.equal((await firm('/contractor/overview')).body.unread, 0);
   assert.ok(ov.body.contacts.some((c: any) => c.projectIds.includes(p.body.id)));
+});
+
+test('ogrodzenia: lista oczekujących (walidacja, zgoda, bez duplikatów) i wejścia w analityce', async () => {
+  const anon = browser();
+  assert.equal((await anon('/events', { method: 'POST', body: { type: 'visit', page: 'ogrodzenia' } })).status, 204);
+  assert.equal(get(`SELECT page FROM studio_events WHERE type = 'visit' ORDER BY id DESC LIMIT 1`)!.page, 'ogrodzenia');
+  assert.equal((await anon('/waitlist', { method: 'POST', body: { product: 'ogrodzenia', email: 'zly', consent: true } })).status, 400);
+  assert.equal((await anon('/waitlist', { method: 'POST', body: { product: 'ogrodzenia', email: 'ola@example.pl' } })).status, 400);
+  assert.equal((await anon('/waitlist', { method: 'POST', body: { product: 'xyz', email: 'ola@example.pl', consent: true } })).status, 400);
+  const plan = JSON.stringify({ type: 'panel', len: 86, gates: 1 });
+  assert.equal((await anon('/waitlist', { method: 'POST', body: { product: 'ogrodzenia', kind: 'investor', email: 'Ola@Example.pl', postalCode: '30-061', detail: plan, consent: true } })).status, 200);
+  assert.equal((await anon('/waitlist', { method: 'POST', body: { product: 'ogrodzenia', kind: 'investor', email: 'ola@example.pl', consent: true } })).status, 200);
+  assert.equal((await anon('/waitlist', { method: 'POST', body: { product: 'ogrodzenia', kind: 'contractor', email: 'firma@plot.pl', postalCode: '31100', consent: true } })).status, 200);
+  const rows = all(`SELECT kind, email, postal_code, detail FROM studio_waitlist ORDER BY id`);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].email, 'ola@example.pl');
+  assert.equal(rows[0].detail, plan);
+  assert.equal(rows[1].postal_code, '31-100');
 });

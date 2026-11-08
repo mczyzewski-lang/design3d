@@ -42,7 +42,7 @@ function post(body: Record<string, string | undefined>): void {
 }
 
 /** Jedno wejście na sesję karty dla danej strony. */
-export function trackVisit(page: 'landing' | 'configurator'): void {
+export function trackVisit(page: 'landing' | 'configurator' | 'ogrodzenia'): void {
   const k = `ss_visit_${page}`;
   try {
     if (sessionStorage.getItem(k)) return;

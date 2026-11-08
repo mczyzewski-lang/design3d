@@ -55,6 +55,7 @@ function render(s) {
       ${kpi('Dołączeni wykonawcy', fmt(p.contractors), `w okresie · łącznie ${fmt(t.contractors)}`, 'accent')}
       ${kpi('Wejścia na landing', fmt(p.landingVisits), 'sesje w okresie')}
       ${kpi('Wejścia do konfiguratora', fmt(p.configuratorVisits), 'sesje w okresie')}
+      ${kpi('Ogrodzenia (wkrótce)', fmt(p.fenceVisits), `wejścia w okresie · lista: ${fmt(t.fenceWaitInvestors)} inwestorów, ${fmt(t.fenceWaitContractors)} wykonawców`)}
       ${kpi('Otwarcia linków udostępnienia', fmt(p.shareViews), 'przez osoby bez dostępu')}
       ${kpi('Zgłoszenia „Znajdź wykonawcę”', fmt(p.quoteRequests), `łącznie ${fmt(t.quoteRequests)}`, p.quoteRequests ? 'warn' : '')}
       ${kpi('Potwierdzone numery telefonu', fmt(t.phones), `projekty z numerem: ${fmt(t.projectsWithPhone)} (${pct(t.projectsWithPhone, t.projects)})`)}

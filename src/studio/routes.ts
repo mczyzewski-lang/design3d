@@ -707,9 +707,30 @@ export function studioRouter(): express.Router {
     res.json({ ok: true });
   });
 
-  /** Anonimowe zdarzenia (wejście na landing / do konfiguratora, wybór układu na landingu). */
-  const EVENT_TYPES = new Set(['visit', 'landing_shape']);
-  const PAGES = new Set(['landing', 'configurator']);
+  /** Anonimowe zdarzenia (wejście na landing / do konfiguratora / na stronę ogrodzeń, wybór układu na landingu). */
+  const EVENT_TYPES = new Set(['visit', 'landing_shape', 'fence_plan']);
+  const PAGES = new Set(['landing', 'configurator', 'ogrodzenia']);
+
+  /** Lista oczekujących („Powiadom mnie o starcie”) dla nowych linii, np. ogrodzeń. */
+  r.post('/waitlist', (req, res) => {
+    if (rateLimited(req, 10, 10 * 60_000, 'waitlist')) return res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' });
+    const b = req.body ?? {};
+    const product = b.product === 'ogrodzenia' ? 'ogrodzenia' : null;
+    const kind = b.kind === 'contractor' ? 'contractor' : 'investor';
+    const email = String(b.email ?? '').trim().toLowerCase().slice(0, 160);
+    const errors: string[] = [];
+    if (!product) errors.push('Nieznana linia produktu');
+    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) errors.push('Podaj poprawny e-mail');
+    const postal = b.postalCode ? normPostal(b.postalCode) : null;
+    if (b.postalCode && !postal) errors.push('Kod pocztowy w formacie 00-000');
+    if (b.consent !== true) errors.push('Zaznacz zgodę na powiadomienie');
+    if (errors.length) return res.status(400).json({ errors });
+    const detail = typeof b.detail === 'string' ? b.detail.slice(0, 600) : null;
+    run(`INSERT INTO studio_waitlist (product, kind, email, postal_code, detail, source) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (product, kind, email) DO UPDATE SET postal_code = COALESCE(excluded.postal_code, postal_code), detail = COALESCE(excluded.detail, detail)`,
+      product, kind, email, postal, detail, cleanTag(b.source));
+    res.json({ ok: true });
+  });
   r.post('/events', (req, res) => {
     const b = req.body ?? {};
     if (!EVENT_TYPES.has(b.type) || rateLimited(req, 120, 10 * 60_000, 'events')) return res.status(204).end();

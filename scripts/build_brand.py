@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generuje logo design3d i linii „design3d schody” (SVG, napisy zamienione na krzywe z fontu Inter).
+"""Generuje logo design3d i linii „design3d schody” / „design3d ogrodzenia” (SVG, napisy zamienione na krzywe z fontu Inter).
 Użycie: PYTHONPATH=<fonttools> python3 scripts/build_brand.py  → configurator/public/brand/*.svg
 Font: Inter / Inter Display (SIL Open Font License) — /usr/share/fonts/opentype/inter."""
 import math, os
@@ -10,6 +10,8 @@ from fontTools.pens.transformPen import TransformPen
 OUT = 'configurator/public/brand'
 FONT_DIR = '/usr/share/fonts/opentype/inter'
 INK, OAK, OAK_LIGHT, MUTED, PAPER = '#141311', '#8a5a2b', '#c89f6d', '#77726a', '#f7f5f1'
+# linia „ogrodzenia”: ten sam układ, akcent szałwiowy (zieleń ogrodu) zamiast dębu na znaku
+SAGE, SAGE_LIGHT = '#4f7a5a', '#a9c3a0'
 os.makedirs(OUT, exist_ok=True)
 
 # ---------- znaki (64×64) ----------
@@ -61,6 +63,43 @@ def stairs_mark():
     for i in reversed(range(n)):
         for kind, f in faces[2 * i: 2 * i + 2]:
             out.append(poly([(x + dx, y + dy) for x, y in f], col[kind]))
+    return out
+
+def fence_mark():
+    # odcinek ogrodzenia sztachetowego: 2 słupki, 2 rygle, 4 sztachety ze skośnymi główkami; izometria jak w schodach
+    s = 8.6
+    def P(x, y, z): return iso(x, y, z, s, 0, 0)
+    D = 0.42   # grubość elementów (głębokość wzdłuż z)
+    items = []  # (głębokość do sortowania, kolor, ściany)
+    def box(x0, x1, y0, y1, z0, z1, top_col, front_col, side_col, peak=0.0):
+        front = [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P((x0 + x1) / 2, y1 + peak, z1), P(x0, y1, z1)] if peak else [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)]
+        side = [P(x1, y0, z0), P(x1, y0, z1), P(x1, y1, z1), P(x1, y1, z0)]
+        if peak:
+            top = [P(x0, y1, z0), P((x0 + x1) / 2, y1 + peak, z0), P((x0 + x1) / 2, y1 + peak, z1), P(x0, y1, z1)]
+            top2 = [P((x0 + x1) / 2, y1 + peak, z0), P(x1, y1, z0), P(x1, y1, z1), P((x0 + x1) / 2, y1 + peak, z1)]
+            return [(top_col, top), ('#86a67e', top2), (side_col, side), (front_col, front)]
+        top = [P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)]
+        return [(side_col, side), (top_col, top), (front_col, front)]
+    W, H = 4.6, 3.3
+    parts = []
+    # rygle (za sztachetami)
+    for y in (0.75, 2.25):
+        parts.append((0, box(0, W, y, y + 0.4, -D, 0, '#d9d3c9', '#bdb5a8', '#a8a097')))
+    # słupki
+    for x in (0, W - 0.7):
+        parts.append((1 + x / 10, box(x, x + 0.7, 0, H + 0.2, -D * 1.3, D * 0.15, SAGE_LIGHT, '#ffffff', '#d9d3c9')))
+    # sztachety (przed ryglami)
+    n, pw = 3, 0.78; gap = (W - 0.7 * 2 - n * pw) / (n + 1)
+    for i in range(n):
+        x = 0.7 + gap * (i + 1) + pw * i
+        parts.append((1 + x / 10 + 0.001, box(x, x + pw, 0.25, H - 0.35, 0, D, SAGE_LIGHT, '#ffffff', '#d9d3c9', peak=0.42)))
+    pts = [pt for _, fs in parts for _, f in fs for pt in f]
+    dx = 32 - (min(p[0] for p in pts) + max(p[0] for p in pts)) / 2
+    dy = 32 - (min(p[1] for p in pts) + max(p[1] for p in pts)) / 2
+    out = []
+    for _, fs in sorted(parts, key=lambda t: t[0]):
+        for col, f in fs:
+            out.append(poly([(x + dx, y + dy) for x, y in f], col))
     return out
 
 def mark_svg(shapes, size=64, bg=INK, rx=14):
@@ -128,4 +167,8 @@ w4 = logo(stairs, 'design3d-schody-logo-inverse', sub='schody', dark=True)
 # sam napis (bez znaku) do wąskich miejsc
 word, end = wordmark(0, 44, 34, False, 'schody')
 open(f'{OUT}/design3d-schody-wordmark.svg', 'w').write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {math.ceil(end + 2)} 64" width="{math.ceil(end + 2)}" height="64">{word}</svg>')
-print('OK', w1, w2, w3, w4)
+fence = fence_mark()
+mark_file(fence, 'ogrodzenia-mark')
+w5 = logo(fence, 'design3d-ogrodzenia-logo', sub='ogrodzenia')
+w6 = logo(fence, 'design3d-ogrodzenia-logo-inverse', sub='ogrodzenia', dark=True)
+print('OK', w1, w2, w3, w4, w5, w6)

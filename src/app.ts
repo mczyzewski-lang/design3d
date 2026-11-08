@@ -53,6 +53,13 @@ export function createApp(): express.Express {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(landing);
   });
+  // Linia „ogrodzenia” — strona zapowiedzi (wkrótce) z planerem; strona główna zostaje przy schodach
+  app.get(['/ogrodzenia', '/ogrodzenia/'], (_req, res) => {
+    const page = path.join(CONFIGURATOR_DIST, 'ogrodzenia.html');
+    if (!fs.existsSync(page)) return res.redirect('/');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(page);
+  });
   app.use('/konfigurator', express.static(CONFIGURATOR_DIST, { index: 'index.html', maxAge: '1h', setHeaders: (res, file) => {
     if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     else if (file.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');

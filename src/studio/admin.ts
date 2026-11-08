@@ -33,6 +33,8 @@ export function studioAdminRouter(): express.Router {
       quoteRequests: count(`SELECT COUNT(*) n FROM studio_quote_requests`),
       phones: count(`SELECT COUNT(*) n FROM studio_phones`),
       projectsWithPhone: count(`SELECT COUNT(*) n FROM studio_projects WHERE owner_phone IS NOT NULL`),
+      fenceWaitInvestors: count(`SELECT COUNT(*) n FROM studio_waitlist WHERE product = 'ogrodzenia' AND kind = 'investor'`),
+      fenceWaitContractors: count(`SELECT COUNT(*) n FROM studio_waitlist WHERE product = 'ogrodzenia' AND kind = 'contractor'`),
     };
     const period = {
       projects: count(`SELECT COUNT(*) n FROM studio_projects WHERE created_at >= ?`, since),
@@ -40,6 +42,7 @@ export function studioAdminRouter(): express.Router {
       shareViews: count(`SELECT COUNT(*) n FROM studio_events WHERE type = 'share_view' AND detail = 'none' AND created_at >= ?`, since),
       landingVisits: count(`SELECT COUNT(*) n FROM studio_events WHERE type = 'visit' AND page = 'landing' AND created_at >= ?`, since),
       configuratorVisits: count(`SELECT COUNT(*) n FROM studio_events WHERE type = 'visit' AND page = 'configurator' AND created_at >= ?`, since),
+      fenceVisits: count(`SELECT COUNT(*) n FROM studio_events WHERE type = 'visit' AND page = 'ogrodzenia' AND created_at >= ?`, since),
       quoteRequests: count(`SELECT COUNT(*) n FROM studio_quote_requests WHERE created_at >= ?`, since),
       comments: count(`SELECT COUNT(*) n FROM studio_comments WHERE created_at >= ?`, since),
     };

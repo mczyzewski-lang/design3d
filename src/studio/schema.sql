@@ -171,3 +171,16 @@ CREATE TABLE IF NOT EXISTS studio_crm_events (
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_studio_crm_events ON studio_crm_events(contractor_id, project_id, id);
+
+-- lista oczekujących na nowe linie (np. „ogrodzenia”): inwestorzy i wykonawcy chcący wiedzieć o starcie
+CREATE TABLE IF NOT EXISTS studio_waitlist (
+  id            INTEGER PRIMARY KEY,
+  product       TEXT NOT NULL,     -- ogrodzenia
+  kind          TEXT NOT NULL,     -- investor | contractor
+  email         TEXT NOT NULL,
+  postal_code   TEXT,
+  detail        TEXT,              -- np. zarys planu ogrodzenia z planera (JSON, krótki)
+  source        TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (product, kind, email)
+);

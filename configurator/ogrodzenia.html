@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zaplanuj ogrodzenie i porównaj wyceny wykonawców z okolicy · design3d ogrodzenia (wkrótce)</title>
+    <link rel="icon" type="image/svg+xml" href="/konfigurator/brand/ogrodzenia-mark.svg" />
+    <meta name="description" content="design3d ogrodzenia — wkrótce: zaplanuj ogrodzenie działki w 3D, policz przęsła, słupki i bramy, a potem porównaj wyceny wykonawców z Twojej okolicy. Bezpłatnie." />
+    <meta property="og:title" content="design3d ogrodzenia — zaplanuj ogrodzenie i porównaj wyceny (wkrótce)" />
+    <meta property="og:description" content="Policz przęsła, słupki i bramy dla swojej działki. Konfigurator 3D i wyceny wykonawców z okolicy już wkrótce." />
+    <meta property="og:type" content="website" />
+    <link rel="canonical" href="https://design3d.pl/ogrodzenia" />
+  </head>
+  <body class="bg-paper text-ink">
+    <header class="sticky top-0 z-30 border-b border-line bg-panel/90 backdrop-blur">
+      <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
+        <a href="/ogrodzenia" class="flex shrink-0 items-center" aria-label="design3d ogrodzenia">
+          <img src="/konfigurator/brand/design3d-ogrodzenia-logo.svg" alt="design3d ogrodzenia" width="417" height="64" class="h-6 w-auto sm:h-8" />
+        </a>
+        <span class="soon-pill hidden sm:inline-flex">wkrótce</span>
+        <nav class="ml-3 hidden gap-5 text-[13px] text-ink/75 md:flex">
+          <a href="#planer" class="hover:text-ink">Planer</a>
+          <a href="#jak-to-dziala" class="hover:text-ink">Jak to działa</a>
+          <a href="#dla-wykonawcow" class="hover:text-ink">Dla wykonawców</a>
+        </nav>
+        <a href="/" class="ml-auto hidden items-center gap-1.5 text-[12.5px] text-muted hover:text-ink sm:flex" data-testid="switch-to-stairs">
+          <img src="/konfigurator/brand/schody-mark.svg" alt="" width="18" height="18" class="rounded-[5px]" />design3d schody
+        </a>
+        <a href="#powiadom" data-cta="header" class="ml-auto shrink-0 whitespace-nowrap rounded-full bg-sage px-4 py-2 text-[12.5px] font-medium text-white hover:bg-sage/90 sm:ml-2">Powiadom mnie</a>
+      </div>
+    </header>
+
+    <main>
+      <!-- HERO -->
+      <section class="mx-auto grid max-w-6xl items-center gap-8 px-4 pb-8 pt-8 md:grid-cols-[1.05fr_1fr] md:gap-12 md:pb-14 md:pt-14">
+        <div>
+          <span class="soon-pill inline-flex">Wkrótce · konfigurator 3D ogrodzeń</span>
+          <h1 class="mt-4 text-[30px] font-semibold leading-[1.12] tracking-tight sm:text-[40px] md:text-[46px]">Zaplanuj ogrodzenie działki i&nbsp;porównaj wyceny wykonawców z&nbsp;Twojej okolicy.</h1>
+          <p class="mt-4 text-[16px] leading-relaxed text-ink/75 md:text-[18px]">Planer policzy już teraz przęsła, słupki, bramę i furtki. Konfigurator 3D i wyceny firm uruchomimy wkrótce — zapisz plan, a dostaniesz powiadomienie jako pierwszy.</p>
+          <div class="mt-6 flex flex-wrap gap-2.5">
+            <a href="#planer" data-cta="hero" class="rounded-full bg-sage px-5 py-3 text-[14px] font-medium text-white hover:bg-sage/90">Zaplanuj ogrodzenie</a>
+            <a href="#powiadom" class="rounded-full border border-line bg-white px-5 py-3 text-[14px] font-medium hover:border-ink/30">Powiadom mnie o starcie</a>
+          </div>
+        </div>
+        <figure class="hero-fence relative overflow-hidden rounded-3xl ring-1 ring-line" aria-hidden="true">
+          <svg viewBox="0 0 600 450" class="block h-auto w-full">
+            <defs>
+              <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef3ea" /><stop offset="1" stop-color="#f7f5f1" /></linearGradient>
+              <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfdcc6" /><stop offset="1" stop-color="#b9cdb0" /></linearGradient>
+            </defs>
+            <rect width="600" height="450" fill="url(#sky)" />
+            <path d="M0 300 L600 230 L600 450 L0 450 Z" fill="url(#grass)" />
+            <g id="hero-fence"></g>
+            <text x="24" y="40" font-size="13" font-weight="600" fill="#4f7a5a" font-family="Inter, sans-serif">Podgląd koncepcyjny · wkrótce w 3D</text>
+          </svg>
+        </figure>
+      </section>
+
+      <!-- PLANER -->
+      <section id="planer" class="border-y border-line bg-panel">
+        <div class="mx-auto max-w-6xl px-4 py-10 md:py-14">
+          <div class="flex flex-wrap items-baseline gap-3">
+            <h2 class="text-[24px] font-semibold tracking-tight md:text-[30px]">Planer ogrodzenia</h2>
+            <span class="rounded-full bg-sage-soft px-3 py-1 text-[12.5px] font-semibold text-sage">Działa już teraz · bezpłatnie</span>
+          </div>
+          <p class="mt-2 max-w-2xl text-[14.5px] text-ink/70">Podaj wymiary działki i zaznacz boki do ogrodzenia. Zestawienie przelicza się od razu — to podstawa do porównywalnych wycen.</p>
+
+          <div class="mt-6 grid gap-5 lg:grid-cols-[1.1fr_1fr]">
+            <form id="planner" class="grid content-start gap-5 self-start rounded-3xl border border-line bg-white p-5" onsubmit="return false">
+              <div>
+                <div class="lbl-h">Rodzaj ogrodzenia</div>
+                <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3" id="types"></div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="block"><span class="lbl">Szerokość działki (front, m)</span><input name="w" type="number" inputmode="decimal" min="5" max="300" step="0.5" value="25" class="inp" /></label>
+                <label class="block"><span class="lbl">Głębokość działki (m)</span><input name="d" type="number" inputmode="decimal" min="5" max="400" step="0.5" value="40" class="inp" /></label>
+              </div>
+              <div>
+                <div class="lbl-h">Które boki grodzimy?</div>
+                <div class="mt-2 flex flex-wrap gap-2" id="sides">
+                  <label class="chip"><input type="checkbox" name="side" value="front" checked /><span>Front (od ulicy)</span></label>
+                  <label class="chip"><input type="checkbox" name="side" value="left" checked /><span>Lewy bok</span></label>
+                  <label class="chip"><input type="checkbox" name="side" value="right" checked /><span>Prawy bok</span></label>
+                  <label class="chip"><input type="checkbox" name="side" value="back" /><span>Tył</span></label>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <label class="block"><span class="lbl">Wysokość</span>
+                  <select name="h" class="inp"><option value="1.2">120 cm</option><option value="1.5" selected>150 cm</option><option value="1.8">180 cm</option><option value="2.0">200 cm</option></select>
+                </label>
+                <label class="block"><span class="lbl">Brama wjazdowa (front)</span>
+                  <select name="gate" class="inp"><option value="none">Bez bramy</option><option value="swing" selected>Skrzydłowa 4 m</option><option value="slide">Przesuwna 4 m</option></select>
+                </label>
+                <label class="block"><span class="lbl">Furtki</span>
+                  <select name="wicket" class="inp"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option></select>
+                </label>
+              </div>
+              <label class="flex items-center gap-2 text-[13.5px]"><input type="checkbox" name="base" checked class="h-4 w-4 accent-[#4f7a5a]" />Podmurówka (prefabrykowana lub betonowa)</label>
+            </form>
+
+            <div class="grid content-start gap-4">
+              <div class="rounded-3xl border border-line bg-white p-4">
+                <div class="lbl-h">Rzut działki</div>
+                <svg id="plot" viewBox="0 0 320 240" class="mt-2 block h-auto w-full" role="img" aria-label="Rzut działki z zaznaczonym ogrodzeniem"></svg>
+              </div>
+              <div class="rounded-3xl border border-line bg-white p-5" data-testid="fence-summary">
+                <div class="lbl-h">Zestawienie</div>
+                <dl id="summary" class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[14px]"></dl>
+                <p class="mt-3 text-[11.5px] leading-snug text-muted">Orientacyjnie: przęsła liczone po osiach słupków, bez spadków terenu. Wykonawca zweryfikuje wymiary na miejscu.</p>
+                <a href="#powiadom" data-cta="planner" class="mt-4 flex w-full items-center justify-center rounded-2xl bg-sage py-3 text-[14px] font-medium text-white hover:bg-sage/90">Zapisz plan i dostań wyceny na starcie</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- JAK TO BĘDZIE DZIAŁAĆ -->
+      <section id="jak-to-dziala" class="mx-auto max-w-6xl px-4 py-12 md:py-16">
+        <div class="flex flex-wrap items-baseline gap-3">
+          <h2 class="text-[24px] font-semibold tracking-tight md:text-[30px]">Jak to będzie działać</h2>
+          <span class="soon-pill inline-flex">wkrótce</span>
+        </div>
+        <ol class="mt-7 grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
+          <li class="rounded-3xl border border-line bg-white p-6">
+            <div class="flex items-center gap-3"><span class="step-no bg-sage">1</span><h3 class="text-[19px] font-semibold">Zaprojektuj ogrodzenie w 3D</h3></div>
+            <p class="mt-3 text-[14.5px] leading-relaxed text-ink/75">Obrys działki, rodzaj i kolor przęseł, słupki, podmurówka, brama skrzydłowa lub przesuwna z automatem, furtka, skrzynka na listy i domofon — od razu w 3D, z zestawieniem materiałów.</p>
+          </li>
+          <li class="grid place-items-center text-[28px] text-sage md:px-1" aria-hidden="true"><span class="md:hidden">↓</span><span class="hidden md:inline">→</span></li>
+          <li class="rounded-3xl border border-line bg-white p-6">
+            <div class="flex items-center gap-3"><span class="step-no bg-sage">2</span><h3 class="text-[19px] font-semibold">Porównaj wyceny z okolicy</h3></div>
+            <p class="mt-3 text-[14.5px] leading-relaxed text-ink/75">Wpisz kod pocztowy — pokażemy firmy ogrodzeniowe w promieniu 50 km. Wybrani wykonawcy dostaną gotowy projekt z wymiarami i odpiszą z konkretną, porównywalną wyceną.</p>
+          </li>
+        </ol>
+        <div class="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <article class="feature"><h3>Panele 3D i 2D</h3><p>Ocynk i malowanie proszkowe w kolorach RAL, różne wysokości i przetłoczenia.</p></article>
+          <article class="feature"><h3>Sztachety i deska</h3><p>Stal, aluminium, kompozyt i drewno — pionowo, poziomo, w odstępach lub pełne.</p></article>
+          <article class="feature"><h3>Gabiony i murowane</h3><p>Kosze z kamieniem, bloczek łupany, klinkier — także jako słupki i podmurówka.</p></article>
+          <article class="feature"><h3>Bramy i furtki</h3><p>Skrzydłowe i przesuwne, z napędem, wideodomofonem i skrzynką na listy.</p></article>
+        </div>
+      </section>
+
+      <!-- POWIADOM -->
+      <section id="powiadom" class="border-y border-line bg-panel">
+        <div class="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-2 md:py-16">
+          <div>
+            <h2 class="text-[24px] font-semibold tracking-tight md:text-[30px]">Zapisz plan — dostaniesz wyceny jako pierwszy</h2>
+            <p class="mt-3 text-[14.5px] leading-relaxed text-ink/75">Gdy wystartujemy, wyślemy Ci link do konfiguratora 3D z Twoim planem, a wykonawcy z okolicy będą mogli od razu przygotować wycenę.</p>
+            <ul class="mt-4 space-y-2 text-[14px] text-ink/80">
+              <li>✓ Jedna wiadomość o starcie — bez spamu</li>
+              <li>✓ Twój plan z planera dołączymy automatycznie</li>
+              <li>✓ Bezpłatnie i bez zobowiązań</li>
+            </ul>
+          </div>
+          <form id="notify-form" class="grid gap-2.5 rounded-3xl border border-line bg-white p-5 shadow-sm" novalidate data-kind="investor">
+            <label class="block"><span class="lbl">E-mail</span><input name="email" type="email" required autocomplete="email" class="inp" /></label>
+            <label class="block"><span class="lbl">Kod pocztowy działki (opcjonalnie)</span><input name="postalCode" inputmode="numeric" autocomplete="postal-code" placeholder="00-000" maxlength="6" class="inp postal" /></label>
+            <label class="flex items-start gap-2 text-[12px] leading-snug text-ink/75"><input name="consent" type="checkbox" class="mt-0.5" /><span>Zgadzam się na jednorazowe powiadomienie e-mail o uruchomieniu design3d ogrodzenia.</span></label>
+            <div class="form-err hidden rounded-lg bg-bad-soft px-3 py-2 text-[12.5px] text-bad"></div>
+            <button type="submit" class="mt-1 rounded-2xl bg-sage py-3 text-[14px] font-medium text-white hover:bg-sage/90 disabled:opacity-60">Powiadom mnie o starcie</button>
+            <div class="form-done hidden rounded-xl bg-sage-soft p-3 text-[13px]"><strong>Zapisane!</strong> Dam znać, gdy ruszymy — razem z Twoim planem ogrodzenia.</div>
+            <p class="text-[11px] text-muted">Administratorem danych jest design3d.pl. E-mail służy wyłącznie do tego powiadomienia.</p>
+          </form>
+        </div>
+      </section>
+
+      <!-- DLA WYKONAWCÓW -->
+      <section id="dla-wykonawcow" class="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-2 md:py-16">
+        <div>
+          <h2 class="text-[24px] font-semibold tracking-tight md:text-[30px]">Budujesz ogrodzenia?</h2>
+          <p class="mt-3 text-[14.5px] leading-relaxed text-ink/75">Dołącz do listy firm na start. Dostaniesz zapytania od inwestorów z Twojego promienia — z gotowym projektem, długościami, bramami i zestawieniem materiałów — w tym samym panelu wykonawcy co przy schodach.</p>
+        </div>
+        <form id="contractor-wait" class="grid gap-2.5 rounded-3xl border border-line bg-white p-5" novalidate data-kind="contractor">
+          <label class="block"><span class="lbl">E-mail firmowy</span><input name="email" type="email" required autocomplete="email" class="inp" /></label>
+          <label class="block"><span class="lbl">Kod pocztowy firmy</span><input name="postalCode" inputmode="numeric" autocomplete="postal-code" placeholder="00-000" maxlength="6" class="inp postal" /></label>
+          <label class="flex items-start gap-2 text-[12px] leading-snug text-ink/75"><input name="consent" type="checkbox" class="mt-0.5" /><span>Chcę dostać informację o starcie i zaproszenie do panelu wykonawcy ogrodzeń.</span></label>
+          <div class="form-err hidden rounded-lg bg-bad-soft px-3 py-2 text-[12.5px] text-bad"></div>
+          <button type="submit" class="mt-1 rounded-2xl bg-ink py-3 text-[14px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">Dołącz do listy wykonawców</button>
+          <div class="form-done hidden rounded-xl bg-sage-soft p-3 text-[13px]"><strong>Dziękujemy!</strong> Odezwiemy się przed startem.</div>
+        </form>
+      </section>
+    </main>
+
+    <footer class="border-t border-line">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-6 text-[12px] text-muted">
+        <span>© design3d.pl · ogrodzenia (wkrótce)</span>
+        <a href="/" class="flex items-center gap-1.5 hover:text-ink"><img src="/konfigurator/brand/schody-mark.svg" alt="" width="16" height="16" class="rounded-[4px]" />design3d schody — konfigurator 3D schodów</a>
+        <span class="ml-auto">Planer ma charakter orientacyjny i wymaga weryfikacji przez wykonawcę.</span>
+      </div>
+    </footer>
+    <script type="module" src="/src/landing/fences.ts"></script>
+  </body>
+</html>
