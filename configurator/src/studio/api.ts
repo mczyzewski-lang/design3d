@@ -15,9 +15,13 @@ export interface CrmQuote {
   projectId: string; token: string | null; projectName: string; title: string; shape: string; postalCode: string | null;
   owner: { name: string; phone: string | null; email: string | null }; receivedAt: string; lastOpenedAt: string; comments: number;
   status: QuoteStatus; amount: number | null; note: string | null; isNew: boolean; updatedAt: string | null;
+  history: CrmHistoryItem[];
 }
+export interface CrmHistoryItem { at: string; type: string; text: string }
+export interface CrmNotification extends CrmHistoryItem { title: string; projectId: string; token: string | null; unread: boolean }
+export interface CrmContact { key: string; name: string; phone: string | null; email: string | null; quotes: number; last: string; projectIds: string[] }
 export interface CrmMe { firstName: string; lastName: string; companyName: string | null; email: string; phone: string; postalCode: string | null; radiusKm: number | null; leads: boolean; listed: boolean; since: string }
-export interface CrmOverview { me: CrmMe; quotes: CrmQuote[]; contacts: Array<{ name: string; phone: string | null; email: string | null; quotes: number; last: string }>; leadsText: string }
+export interface CrmOverview { me: CrmMe; quotes: CrmQuote[]; contacts: CrmContact[]; leadsText: string; unread: number }
 export interface ProjectListItem { id: string; name: string; current_version: number; updated_at: string }
 
 export class ApiError extends Error {
@@ -65,6 +69,8 @@ export const api = {
   crmOverview: () => call<CrmOverview>('/contractor/overview'),
   crmUpdateMe: (b: { companyName: string; phone: string; postalCode: string; radiusKm: string; leads: boolean }) => call<{ ok: true }>('/contractor/me', 'PATCH', b),
   crmUpdateQuote: (projectId: string, b: { status?: QuoteStatus; amount?: string | number | null; note?: string }) => call<{ ok: true }>(`/contractor/quotes/${projectId}`, 'PUT', b),
+  crmNotifications: () => call<{ items: CrmNotification[]; seenAt: string | null }>('/contractor/notifications'),
+  crmNotificationsSeen: () => call<{ ok: true }>('/contractor/notifications/seen', 'POST'),
   crmViewed: (projectId: string) => call<{ ok: true }>(`/contractor/quotes/${projectId}/viewed`, 'POST'),
   me: () => call<{ owner: boolean; phone: string | null; person: { firstName: string; lastName: string } | null; smsTest: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string; phone: string } }>('/me'),
   phoneStart: (form: { phone: string; fullName: string; consent: boolean }) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/phone/start', 'POST', form),

@@ -21,7 +21,7 @@ export function ensureStudioSchema(): void {
       ['leads_opt_in', 'INTEGER NOT NULL DEFAULT 0'], ['postal_code', 'TEXT'], ['radius_km', 'INTEGER'],
       ['leads_consent_text', 'TEXT'], ['leads_consent_at', 'TEXT'],
       ['source', 'TEXT'], ['via', 'TEXT'], ['ref_project_id', 'TEXT'],
-      ['company_name', 'TEXT'], ['listed', 'INTEGER NOT NULL DEFAULT 0'],
+      ['company_name', 'TEXT'], ['listed', 'INTEGER NOT NULL DEFAULT 0'], ['notifications_seen_at', 'TEXT'],
     ],
     studio_projects: [['source', 'TEXT'], ['owner_phone', 'TEXT']],
     studio_otp: [['first_name', 'TEXT'], ['last_name', 'TEXT']],
@@ -187,6 +187,50 @@ function rateLimited(req: Request, max = 10, windowMs = 10 * 60_000, bucket = 'r
   return list.length > max;
 }
 
+const STATUS_LABEL_PL: Record<string, string> = { new: 'Nowa', in_progress: 'W przygotowaniu', sent: 'Wysłana', won: 'Wygrana', lost: 'Przegrana' };
+const short = (t: string, n = 90) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+const fmtZl = (v: string) => `${Number(v).toLocaleString('pl-PL', { maximumFractionDigits: 2 })} zł`;
+
+export interface HistoryItem { at: string; type: string; text: string }
+
+/** Historia szansy sprzedaży (projektu) z perspektywy firmy — najnowsze pierwsze. */
+export function projectHistory(contractorId: number, projectId: string): HistoryItem[] {
+  const acc = get(`SELECT first_at FROM studio_access WHERE contractor_id = ? AND project_id = ?`, contractorId, projectId);
+  if (!acc) return [];
+  const out: HistoryItem[] = [{ at: acc.first_at as string, type: 'received', text: 'Projekt otrzymany do wyceny' }];
+  for (const e of all(`SELECT type, detail, created_at FROM studio_crm_events WHERE contractor_id = ? AND project_id = ?`, contractorId, projectId)) {
+    const text = e.type === 'viewed' ? 'Otworzyłeś projekt 3D' : e.type === 'status' ? `Etap: ${STATUS_LABEL_PL[e.detail as string] ?? e.detail}` : e.type === 'amount' ? `Kwota wyceny: ${fmtZl(e.detail as string)}` : String(e.type);
+    out.push({ at: e.created_at as string, type: e.type as string, text });
+  }
+  for (const m of all(`SELECT author_role, contractor_id, text, created_at FROM studio_comments WHERE project_id = ?`, projectId)) {
+    // wiadomości inwestora z całego projektu (także sprzed udostępnienia — to kontekst szansy)
+    if (m.author_role === 'owner') out.push({ at: m.created_at as string, type: 'owner_message', text: `Inwestor: ${short(m.text as string)}` });
+    else if (m.contractor_id === contractorId) out.push({ at: m.created_at as string, type: 'my_message', text: `Ty: ${short(m.text as string)}` });
+  }
+  for (const v of all(`SELECT created_at FROM studio_events WHERE type = 'owner_view' AND project_id = ? AND created_at >= ?`, projectId, acc.first_at)) {
+    out.push({ at: v.created_at as string, type: 'owner_view', text: 'Inwestor otworzył projekt' });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** Powiadomienia firmy: zdarzenia od inwestorów i nowe wyceny (bez własnych działań). */
+export function notificationsFor(c: Row): Array<HistoryItem & { projectId: string; token: string | null; title: string; unread: boolean }> {
+  const seen = (c.notifications_seen_at as string) ?? '';
+  const out = [];
+  for (const p of all(`SELECT a.project_id, pr.name, (SELECT token FROM studio_shares s WHERE s.project_id = a.project_id ORDER BY s.created_at LIMIT 1) token
+                       FROM studio_access a JOIN studio_projects pr ON pr.id = a.project_id WHERE a.contractor_id = ?`, c.id)) {
+    const hist = projectHistory(c.id as number, p.project_id as string);
+    const received = hist.find((h) => h.type === 'received')?.at ?? '';
+    for (const h of hist) {
+      if (!['received', 'owner_message', 'owner_view'].includes(h.type)) continue;
+      if (h.at < received) continue; // starsze wiadomości są w historii, ale nie jako powiadomienie
+      const title = h.type === 'received' ? 'Nowy projekt do wyceny' : h.type === 'owner_message' ? 'Nowa wiadomość od inwestora' : 'Inwestor otworzył projekt';
+      out.push({ ...h, title, projectId: p.project_id as string, token: (p.token as string) ?? null, unread: h.at > seen, text: `${h.type === 'owner_message' ? h.text.replace(/^Inwestor: /, '') : `„${p.name}”`}` });
+    }
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60);
+}
+
 /** Widoczni w wyszukiwarce wykonawcy w promieniu od punktu, najbliżsi pierwsi. */
 export function nearbyContractors(origin: { lat: number; lon: number }, radiusKm: number, includeUnlisted = false): Array<{ id: number; name: string; place: string; distanceKm: number; radiusKm: number; servesArea: boolean }> {
   const rows = all(`SELECT id, first_name, last_name, company_name, postal_code, radius_km FROM studio_contractors WHERE leads_opt_in = 1 ${includeUnlisted ? '' : 'AND listed = 1'}`);
@@ -263,6 +307,12 @@ export function studioRouter(): express.Router {
   r.get('/projects/:id', (req, res) => {
     const id = ownerOnly(req, res);
     if (!id) return;
+    // „Inwestor otworzył projekt” — do aktywności firm z dostępem (najwyżej raz na godzinę, chyba że od tego czasu doszła nowa firma)
+    const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+    const lastAccess = (get(`SELECT MAX(first_at) m FROM studio_access WHERE project_id = ?`, id)?.m as string | null) ?? '';
+    if (!get(`SELECT 1 FROM studio_events WHERE type = 'owner_view' AND project_id = ? AND created_at > ?`, id, lastAccess > hourAgo ? lastAccess : hourAgo)) {
+      run(`INSERT INTO studio_events (type, page, project_id) VALUES ('owner_view', 'configurator', ?)`, id);
+    }
     const share = get(`SELECT token FROM studio_shares WHERE project_id = ? ORDER BY created_at LIMIT 1`, id);
     res.json({
       ...projectView(id), role: 'owner', shareToken: share?.token ?? null,
@@ -568,15 +618,16 @@ export function studioRouter(): express.Router {
         receivedAt: p.first_at, lastOpenedAt: p.last_at, comments: p.comments,
         status: (q?.status as string) ?? 'new', amount: q?.amount ?? null, note: q?.note ?? null,
         isNew: !q?.viewed_at, updatedAt: q?.updated_at ?? null,
+        history: projectHistory(c.id as number, p.id as string).slice(0, 40),
       };
     });
     // kontakty: inwestorzy z wycen (wg telefonu / e-maila / nazwy)
-    const contacts = new Map<string, { name: string; phone: string | null; email: string | null; quotes: number; last: string }>();
+    const contacts = new Map<string, { key: string; name: string; phone: string | null; email: string | null; quotes: number; last: string; projectIds: string[] }>();
     for (const q of quotes) {
       const k = q.owner.phone ?? q.owner.email ?? q.owner.name;
       const e = contacts.get(k);
-      if (e) { e.quotes++; if (q.receivedAt > e.last) e.last = q.receivedAt as string; }
-      else contacts.set(k, { name: q.owner.name, phone: q.owner.phone, email: q.owner.email, quotes: 1, last: q.receivedAt as string });
+      if (e) { e.quotes++; e.projectIds.push(q.projectId as string); if (q.receivedAt > e.last) e.last = q.receivedAt as string; }
+      else contacts.set(k, { key: k, name: q.owner.name, phone: q.owner.phone, email: q.owner.email, quotes: 1, last: q.receivedAt as string, projectIds: [q.projectId as string] });
     }
     res.json({
       me: {
@@ -584,6 +635,7 @@ export function studioRouter(): express.Router {
         postalCode: c.postal_code ?? null, radiusKm: c.radius_km ?? null, leads: !!c.leads_opt_in, listed: !!c.listed, since: c.created_at,
       },
       quotes, contacts: [...contacts.values()], leadsText: LEADS_TEXT,
+      unread: notificationsFor(c).filter((n) => n.unread).length,
     });
   });
 
@@ -615,12 +667,20 @@ export function studioRouter(): express.Router {
     if (!get(`SELECT 1 FROM studio_access WHERE contractor_id = ? AND project_id = ?`, c.id, pid)) return res.status(404).json({ error: 'Brak dostępu do projektu' });
     const b = req.body ?? {};
     const status = QUOTE_STATUSES.has(b.status) ? b.status : null;
-    const amount = b.amount === null || b.amount === '' || b.amount === undefined ? null : Math.round(Number(String(b.amount).replace(',', '.')) * 100) / 100;
+    // kwota zmienia się tylko, gdy jest w żądaniu (zmiana samego etapu, np. w pipeline, jej nie kasuje)
+    const hasAmount = 'amount' in b;
+    const amount = !hasAmount || b.amount === null || b.amount === '' ? null : Math.round(Number(String(b.amount).replace(/\s/g, '').replace(',', '.')) * 100) / 100;
     if (amount !== null && !(amount >= 0 && amount < 10_000_000)) return res.status(400).json({ error: 'Nieprawidłowa kwota' });
     const note = b.note === undefined ? undefined : String(b.note).slice(0, 2000);
-    run(`INSERT INTO studio_contractor_quotes (contractor_id, project_id, status, amount, note, viewed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(contractor_id, project_id) DO UPDATE SET status = COALESCE(?, status), amount = ?, note = COALESCE(?, note), viewed_at = COALESCE(viewed_at, excluded.viewed_at), updated_at = excluded.updated_at`,
-      c.id, pid, status ?? 'in_progress', amount, note ?? null, nowIso(), nowIso(), status, amount, note ?? null);
+    const before = get(`SELECT status, amount FROM studio_contractor_quotes WHERE contractor_id = ? AND project_id = ?`, c.id, pid);
+    tx(() => {
+      run(`INSERT INTO studio_contractor_quotes (contractor_id, project_id, status, amount, note, viewed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(contractor_id, project_id) DO UPDATE SET status = COALESCE(?, status), amount = CASE WHEN ? THEN ? ELSE amount END, note = COALESCE(?, note), viewed_at = COALESCE(viewed_at, excluded.viewed_at), updated_at = excluded.updated_at`,
+        c.id, pid, status ?? 'in_progress', amount, note ?? null, nowIso(), nowIso(), status, hasAmount ? 1 : 0, amount, note ?? null);
+      const prevStatus = (before?.status as string) ?? 'new';
+      if (status && status !== prevStatus) run(`INSERT INTO studio_crm_events (contractor_id, project_id, type, detail) VALUES (?, ?, 'status', ?)`, c.id, pid, status);
+      if (hasAmount && amount !== null && amount !== (before?.amount ?? null)) run(`INSERT INTO studio_crm_events (contractor_id, project_id, type, detail) VALUES (?, ?, 'amount', ?)`, c.id, pid, String(amount));
+    });
     res.json({ ok: true });
   }));
   r.post('/contractor/quotes/:pid/viewed', (req, res) => {
@@ -628,7 +688,22 @@ export function studioRouter(): express.Router {
     if (!c) return;
     const pid = String(req.params.pid);
     if (!get(`SELECT 1 FROM studio_access WHERE contractor_id = ? AND project_id = ?`, c.id, pid)) return res.status(404).json({ error: 'Brak dostępu do projektu' });
+    const first = !get(`SELECT viewed_at FROM studio_contractor_quotes WHERE contractor_id = ? AND project_id = ? AND viewed_at IS NOT NULL`, c.id, pid);
     run(`INSERT INTO studio_contractor_quotes (contractor_id, project_id, viewed_at) VALUES (?, ?, ?) ON CONFLICT(contractor_id, project_id) DO UPDATE SET viewed_at = COALESCE(viewed_at, excluded.viewed_at)`, c.id, pid, nowIso());
+    if (first) run(`INSERT INTO studio_crm_events (contractor_id, project_id, type) VALUES (?, ?, 'viewed')`, c.id, pid);
+    res.json({ ok: true });
+  });
+
+  /** Aktywność (powiadomienia) firmy: nowe wyceny, wiadomości i otwarcia projektu przez inwestora. */
+  r.get('/contractor/notifications', (req, res) => {
+    const c = contractorOnly(req, res);
+    if (!c) return;
+    res.json({ items: notificationsFor(c), seenAt: c.notifications_seen_at ?? null });
+  });
+  r.post('/contractor/notifications/seen', (req, res) => {
+    const c = contractorOnly(req, res);
+    if (!c) return;
+    run(`UPDATE studio_contractors SET notifications_seen_at = ? WHERE id = ?`, nowIso(), c.id);
     res.json({ ok: true });
   });
 

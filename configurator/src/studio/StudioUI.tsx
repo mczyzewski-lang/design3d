@@ -43,15 +43,15 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
     return () => document.removeEventListener('mousedown', h);
   }, []);
   useEffect(() => { if (st.error) { toast(st.error); st.clearError(); } }, [st.error]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (st.role === 'none') return null;
+  // firma w projekcie z panelu: bez „Zapisz kopię” — wycenę wysyła czerwony pasek „Wyceń i wyślij”
+  if (st.role === 'none' || st.role === 'contractor') return null;
   const owner = st.role === 'owner';
-  const contractor = st.role === 'contractor';
 
   const save = async () => {
     setMenu(false);
     let name: string | undefined;
     if (!owner) {
-      const n = prompt(contractor ? 'Zapisz własną kopię projektu — nazwa:' : 'Nazwa projektu (np. „Schody — dom Kowalskich”):', contractor ? `${st.name} (kopia)` : st.name);
+      const n = prompt('Nazwa projektu (np. „Schody — dom Kowalskich”):', st.name);
       if (n === null) return;
       name = n.trim() || st.name;
     }
@@ -69,23 +69,17 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
     <div className="flex items-center gap-1.5">
       {owner && st.versions.length > 0 && <span className="hidden text-[11.5px] text-muted lg:inline">{st.name} · wersja {st.version}{dirty ? ' · niezapisane zmiany' : ''}</span>}
       <div className="relative flex" ref={ref}>
-        {contractor ? (
-          <button type="button" data-testid="save" disabled={st.busy} onClick={save} className="flex items-center gap-2 rounded-l-full bg-ink py-1.5 pl-3.5 pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
-            <Save size={14} /> {st.busy ? 'Zapisywanie…' : 'Zapisz kopię'}
-          </button>
-        ) : (
           <button type="button" data-testid="save-share" disabled={st.busy} onClick={() => st.setShareOpen(true)} className="flex items-center gap-2 whitespace-nowrap rounded-l-full bg-ink py-1.5 pl-3.5 pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
             <Share2 size={14} /> {st.busy ? 'Zapisywanie…' : 'Zapisz i udostępnij'}
             {dirty && owner && <span className="h-1.5 w-1.5 rounded-full bg-[#f3a845]" title="Niezapisane zmiany" />}
           </button>
-        )}
         <button type="button" data-testid="save-menu" aria-label="Więcej opcji zapisu" onClick={() => { setMenu(!menu); void st.refreshProjects(); }} className="rounded-r-full border-l border-white/20 bg-ink px-2 text-white hover:bg-ink/85">
           <ChevronDown size={15} />
         </button>
         <AnimatePresence>
           {menu && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute right-0 top-full z-40 mt-1 w-72 rounded-xl border border-line bg-white p-1.5 shadow-xl">
-              {!contractor && <Item testId="save" onClick={save}><Save size={14} /> {owner ? 'Zapisz zmiany (bez udostępniania)' : 'Zapisz projekt (bez udostępniania)'}</Item>}
+              {<Item testId="save" onClick={save}><Save size={14} /> {owner ? 'Zapisz zmiany (bez udostępniania)' : 'Zapisz projekt (bez udostępniania)'}</Item>}
               <Item testId="save-version" onClick={saveVersion}><Save size={14} /> Zapisz jako nową wersję…</Item>
               {owner && st.versions.length > 0 && <Hdr>Wersje projektu</Hdr>}
               {owner && st.versions.map((v) => (
@@ -109,7 +103,7 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
           )}
         </AnimatePresence>
       </div>
-      {!contractor && <SaveShareDialog open={st.shareOpen} onClose={() => st.setShareOpen(false)} toast={toast} />}
+      {<SaveShareDialog open={st.shareOpen} onClose={() => st.setShareOpen(false)} toast={toast} />}
     </div>
   );
 }

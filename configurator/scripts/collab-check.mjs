@@ -173,11 +173,29 @@ await f.click('[data-testid="quote-send"]');
 await f.waitForSelector('[data-testid="quote-sent"]');
 ok(true, '„Wyceń i wyślij” — wycena wysłana do inwestora');
 await f.click('[data-testid="quote-sent"] >> text=Wróć do panelu');
-const cur = '[data-testid="crm-quote"]:has([data-testid="crm-status"])'; // karta bieżącego projektu (rozwinięta)
+const cur = '[data-testid="crm-quote"]'; // karty szans są domyślnie zwinięte
 await f.waitForSelector(cur);
+ok((await f.locator(`${cur} [data-testid="crm-status"]`).count()) === 0 && (await f.locator(`${cur} [data-testid="crm-open-project-quick"]`).count()) > 0, 'szansa zwinięta, a przycisk „Projekt 3D” widoczny');
 await f.waitForFunction((sel) => /Wysłana/.test(document.querySelector(sel)?.textContent ?? ''), cur);
 ok(/28\s?500/.test(await f.textContent(cur)), 'w panelu: status „Wysłana” i kwota');
 await f.screenshot({ path: `${out}/5-firma-widok.png` });
+await f.click('[data-testid="crm-stage-sent"]');
+ok((await f.locator('[data-testid="crm-quote"]').count()) === 1, 'filtr etapu „Wysłane”');
+await f.click('[data-testid="crm-stage-won"]');
+ok((await f.locator('[data-testid="crm-quote"]').count()) === 0, 'filtr etapu „Wygrane” — pusto');
+await f.click('[data-testid="crm-view-pipeline"]');
+ok((await f.locator('[data-testid="crm-col-sent"] [data-testid="crm-pipe-card"]').count()) === 1, 'widok pipeline: karta w kolumnie „Wysłane”');
+await f.screenshot({ path: `${out}/5b-pipeline.png` });
+await f.click('[data-testid="crm-view-list"]');
+await f.click('[data-testid="crm-stage-all"]');
+await f.click('[data-testid="crm-tab-contacts"]');
+await f.click('[data-testid="crm-contact"] >> nth=0');
+await f.waitForSelector('[data-testid="crm-contact-detail"]');
+ok((await f.locator('[data-testid="crm-contact-deal"]').count()) >= 1, 'kontakt: przypisana szansa sprzedaży');
+const hist = await f.textContent('[data-testid="crm-contact-history"]');
+ok(/Etap: Wysłana/.test(hist) && /Kwota wyceny/.test(hist) && /Inwestor:/.test(hist), `kontakt: historia (${hist.slice(0, 80)}…)`);
+await f.screenshot({ path: `${out}/5c-kontakt.png` });
+await f.click('[data-testid="crm-tab-quotes"]');
 await f.reload({ waitUntil: 'networkidle' });
 await f.waitForTimeout(1500);
 ok((await f.locator('[data-testid="share-gate"]').count()) === 0, 'aktywna sesja firmy pomija bramkę');
@@ -194,6 +212,16 @@ await o.waitForSelector('text=Firmy, które otworzyły projekt');
 ok((await o.locator('[data-testid="phone-done"]').count()) === 1, 'numer zapamiętany — krok 1 od razu zaliczony');
 ok((await o.locator('text=jan@schody-stolarz.pl').count()) > 0, 'właściciel widzi dane firmy');
 await o.screenshot({ path: `${out}/6-wlasciciel-firmy.png` });
+
+// ---- firma: powiadomienia w dolnym menu ----
+await f.reload({ waitUntil: 'networkidle' });
+await f.click('[data-testid="back-to-crm"]').catch(() => {});
+await f.waitForSelector('[data-testid="crm-tab-activity"]');
+await f.click('[data-testid="crm-tab-activity"]');
+await f.waitForSelector('[data-testid="crm-notification"]');
+const act = await f.textContent('[data-testid="crm-activity"]');
+ok(/otworzył projekt/.test(act) && /Nowy projekt do wyceny/.test(act), `aktywność: „Inwestor otworzył projekt” i nowy projekt (${act.slice(0, 120)})`);
+await f.screenshot({ path: `${out}/7-aktywnosc.png` });
 
 await browser.close();
 const fatal = problems.filter((p) => !/THREE\.Clock/.test(p));

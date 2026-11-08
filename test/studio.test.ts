@@ -370,3 +370,34 @@ test('jedno pole „Imię i nazwisko”: serwer rozdziela, samo imię to błąd'
   const st = await browser()('/phone/start', { method: 'POST', body: { fullName: 'Ola Nowak', phone: '600 600 602', consent: true } });
   assert.equal(st.status, 200);
 });
+
+test('CRM: zmiana etapu nie kasuje kwoty, historia szansy i powiadomienia (z licznikiem)', async () => {
+  (await import('../src/studio/routes.ts')).resetRateLimits();
+  const inv = browser();
+  const p = await inv('/projects', { method: 'POST', body: { name: 'Dom Lisów', config: { ...CFG, stairs: { shape: 'L' } } } });
+  const sh = await inv(`/projects/${p.body.id}/share`, { method: 'POST' });
+  const firm = browser();
+  await firm('/contractors', { method: 'POST', body: { fullName: 'Robert Kant', email: 'robert@kant.pl', phone: '610 000 111', postalCode: '31-500', radiusKm: 40, leads: true } });
+  await firm(`/shares/${sh.body.token}`); // dostęp firmy z sesją
+  await firm(`/contractor/quotes/${p.body.id}/viewed`, { method: 'POST' });
+  await firm(`/contractor/quotes/${p.body.id}`, { method: 'PUT', body: { status: 'sent', amount: '19 900' } });
+  await firm(`/contractor/quotes/${p.body.id}`, { method: 'PUT', body: { status: 'won' } }); // tylko etap
+  let ov = await firm('/contractor/overview');
+  let q = ov.body.quotes.find((x: any) => x.projectId === p.body.id);
+  assert.deepEqual([q.status, q.amount], ['won', 19900], 'kwota zostaje po zmianie samego etapu');
+  const types = q.history.map((h: any) => h.type);
+  for (const t of ['received', 'viewed', 'status', 'amount']) assert.ok(types.includes(t), `historia ma „${t}”`);
+  assert.ok(q.history.some((h: any) => h.text === 'Etap: Wygrana'));
+  // inwestor odpisuje i otwiera projekt → aktywność firmy
+  await inv(`/projects/${p.body.id}/comments`, { method: 'POST', body: { text: 'Dziękuję, akceptuję termin.' } });
+  await inv(`/projects/${p.body.id}`);
+  ov = await firm('/contractor/overview');
+  assert.ok(ov.body.unread >= 3, 'licznik: nowy projekt, wiadomość, otwarcie projektu');
+  const n = await firm('/contractor/notifications');
+  const mine = n.body.items.filter((x: any) => x.projectId === p.body.id).map((x: any) => x.type);
+  assert.ok(mine.includes('received') && mine.includes('owner_message') && mine.includes('owner_view'));
+  assert.ok(n.body.items.find((x: any) => x.type === 'owner_message').text.includes('akceptuję termin'));
+  await firm('/contractor/notifications/seen', { method: 'POST' });
+  assert.equal((await firm('/contractor/overview')).body.unread, 0);
+  assert.ok(ov.body.contacts.some((c: any) => c.projectIds.includes(p.body.id)));
+});

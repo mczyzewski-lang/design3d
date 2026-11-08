@@ -160,3 +160,14 @@ CREATE TABLE IF NOT EXISTS studio_contractor_quotes (
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   PRIMARY KEY (contractor_id, project_id)
 );
+
+-- dziennik zdarzeń panelu wykonawcy (historia szansy sprzedaży)
+CREATE TABLE IF NOT EXISTS studio_crm_events (
+  id            INTEGER PRIMARY KEY,
+  contractor_id INTEGER NOT NULL REFERENCES studio_contractors(id) ON DELETE CASCADE,
+  project_id    TEXT NOT NULL REFERENCES studio_projects(id) ON DELETE CASCADE,
+  type          TEXT NOT NULL,     -- viewed | status | amount | quote_sent
+  detail        TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_studio_crm_events ON studio_crm_events(contractor_id, project_id, id);

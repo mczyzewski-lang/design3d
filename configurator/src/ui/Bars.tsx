@@ -28,14 +28,11 @@ const MenuItem = ({ onClick, children, active }: { onClick: () => void; children
 
 export function TopBar() {
   const [toast, toastNode] = useToast();
-  // firma w projekcie: na wąskim ekranie sam znak (obok „← Panel” i „Zapisz kopię”)
-  const contractor = useStudio((s) => s.role === 'contractor');
   return (
     <header className="relative z-30 flex h-14 shrink-0 items-center gap-1 border-b border-line bg-panel/90 px-3 backdrop-blur sm:gap-2 sm:px-4">
       <CrmBackButton />
       <a href="/" className="mr-1 flex shrink-0 items-center sm:mr-3" aria-label="design3d schody — strona główna" data-testid="brand-logo">
-        {contractor && <img src={`${import.meta.env.BASE_URL}brand/schody-mark.svg`} alt="design3d schody" width={32} height={32} className="h-8 w-8 rounded-[8px] sm:hidden" />}
-        <img src={`${import.meta.env.BASE_URL}brand/design3d-schody-logo.svg`} alt="design3d schody" width={361} height={64} className={`h-[22px] w-auto sm:h-7 ${contractor ? 'hidden sm:block' : ''}`} />
+        <img src={`${import.meta.env.BASE_URL}brand/design3d-schody-logo.svg`} alt="design3d schody" width={361} height={64} className="h-[22px] w-auto sm:h-7" />
       </a>
       {/* menu „Kolekcje” i „Plik” (pobieranie plików) tymczasowo ukryte — patrz README */}
       <div className="flex-1" />
