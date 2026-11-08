@@ -32,7 +32,7 @@ export function Panel() {
   );
   const style = stepStyleOf(c);
   return (
-    <aside className="flex flex-col bg-panel pb-20 scrollbar-thin md:h-full md:overflow-y-auto md:pb-0" data-testid="panel">
+    <aside className="flex flex-col bg-panel pb-32 scrollbar-thin md:h-full md:overflow-y-auto md:pb-0" data-testid="panel">
       <CommentsCard />
       <GroupLabel hint="Wyklikaj wygląd — bez wpisywania wymiarów">Wygląd schodów</GroupLabel>
       {S(1, 'Typ schodów', <ShapeSection />, `${SHAPE_LABEL[c.stairs.shape].split(' (')[0]}${c.stairs.turnType === 'winders' && c.stairs.shape !== 'I' && c.stairs.shape !== 'S' ? ', zabiegowe' : ''}`, 'sec-shape')}

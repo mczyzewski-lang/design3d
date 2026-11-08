@@ -163,6 +163,20 @@ await f.press('[data-testid="comments-card"] input', 'Enter');
 await f.waitForTimeout(800);
 const filt = await f.evaluate(() => getComputedStyle(document.querySelector('#root > div')).filter)
 ok(filt === 'none', `po rejestracji projekt nie jest rozmyty (filter: ${filt})`);
+// projekt z panelu: „← Panel” na lewo od logo i czerwone „Wyceń i wyślij” z podpowiedzią o szybkiej reakcji
+ok(await f.evaluate(() => { const b = document.querySelector('[data-testid="back-to-crm"]').getBoundingClientRect(); const l = document.querySelector('[data-testid="brand-logo"]').getBoundingClientRect(); return b.right <= l.left + 1; }), 'przycisk „← Panel” na lewo od logo');
+ok(/60×/.test(await f.textContent('[data-testid="cta-bar-contractor"] [data-testid="speed-tip"]')), 'pasek „Wyceń i wyślij” z podpowiedzią (HBR)');
+await f.click('[data-testid="cta-quote"]');
+await f.fill('[data-testid="quote-amount"]', '28 500');
+await f.fill('[data-testid="quote-term"]', '6 tygodni');
+await f.click('[data-testid="quote-send"]');
+await f.waitForSelector('[data-testid="quote-sent"]');
+ok(true, '„Wyceń i wyślij” — wycena wysłana do inwestora');
+await f.click('[data-testid="quote-sent"] >> text=Wróć do panelu');
+const cur = '[data-testid="crm-quote"]:has([data-testid="crm-status"])'; // karta bieżącego projektu (rozwinięta)
+await f.waitForSelector(cur);
+await f.waitForFunction((sel) => /Wysłana/.test(document.querySelector(sel)?.textContent ?? ''), cur);
+ok(/28\s?500/.test(await f.textContent(cur)), 'w panelu: status „Wysłana” i kwota');
 await f.screenshot({ path: `${out}/5-firma-widok.png` });
 await f.reload({ waitUntil: 'networkidle' });
 await f.waitForTimeout(1500);
@@ -174,6 +188,7 @@ await o.waitForTimeout(1500);
 await o.waitForSelector('[data-testid="comments-card"]', { timeout: 90000 }); // projekt właściciela wczytuje się po przeładowaniu
 await o.click('[data-testid="comments-toggle"]');
 ok((await o.locator('text=Wycena: ok. 28 000').count()) > 0, 'właściciel widzi komentarz firmy');
+ok(await o.evaluate(() => /Wycena: 28[\s\u00a0\u202f]500 zł brutto/.test(document.querySelector('[data-testid="comments-card"]')?.textContent ?? '')), 'właściciel widzi wycenę wysłaną przyciskiem „Wyceń i wyślij”');
 await o.click('[data-testid="save-share"]');
 await o.waitForSelector('text=Firmy, które otworzyły projekt');
 ok((await o.locator('[data-testid="phone-done"]').count()) === 1, 'numer zapamiętany — krok 1 od razu zaliczony');

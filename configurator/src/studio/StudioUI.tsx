@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Copy, HardHat, House, KeyRound, Lock, Mail, MessageCirclePlus, MessageSquare, Save, Send, Share2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Copy, HardHat, House, KeyRound, Lock, Mail, MessageCirclePlus, MessageSquare, Save, Send, Share2, X } from 'lucide-react';
 import { useConfig } from '../store/store';
 import { isDirty, useStudio } from './studioStore';
 import { api, type NearbyDto } from './api';
@@ -68,7 +68,6 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
   return (
     <div className="flex items-center gap-1.5">
       {owner && st.versions.length > 0 && <span className="hidden text-[11.5px] text-muted lg:inline">{st.name} · wersja {st.version}{dirty ? ' · niezapisane zmiany' : ''}</span>}
-      {contractor && <button type="button" data-testid="back-to-crm" onClick={() => st.setCrm(true)} className="flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-[12px] hover:border-oak"><HardHat size={13} /><span className="hidden sm:inline">← Panel wykonawcy</span><span className="sm:hidden">Panel</span></button>}
       <div className="relative flex" ref={ref}>
         {contractor ? (
           <button type="button" data-testid="save" disabled={st.busy} onClick={save} className="flex items-center gap-2 rounded-l-full bg-ink py-1.5 pl-3.5 pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
@@ -201,7 +200,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
               <p className="text-[12.5px] text-ink/80" data-testid="phone-done">Projekt przypisany do numeru <b>{fmtPhone(st.phone!)}</b>. Na innym urządzeniu wystarczy ten sam numer.</p>
             ) : !sent ? (
               <form className="grid grid-cols-1 gap-2" onSubmit={send}>
-                <input data-testid="person-name" required autoComplete="name" placeholder="Imię i nazwisko" value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
+                <input data-testid="person-name" required autoFocus autoComplete="name" placeholder="Imię i nazwisko" value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
                 <div className="flex gap-2">
                   <div className="flex min-w-0 flex-1 items-center rounded-lg border border-line focus-within:border-oak">
                     <span className="pl-3 text-[14px] text-muted">+48</span>
@@ -222,7 +221,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
                 <p className="text-[12px] text-muted">Wysłaliśmy 6-cyfrowy kod na <b className="text-ink">{fmtPhone(sent.phone)}</b>.</p>
                 {sent.testCode && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12px] text-warn" data-testid="phone-test-code">Tryb testowy (bramka SMS nie jest jeszcze skonfigurowana) — Twój kod: <b className="tracking-[0.2em]">{sent.testCode}</b></p>}
                 <div className="flex gap-2">
-                  <input data-testid="phone-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className={`${input} text-center tracking-[0.4em]`} />
+                  <input data-testid="phone-code" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className={`${input} text-center tracking-[0.4em]`} />
                   <button type="submit" data-testid="phone-verify" disabled={busy || code.length !== 6} className="shrink-0 rounded-lg bg-ink px-4 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? '…' : 'Potwierdź'}</button>
                 </div>
                 <button type="button" onClick={() => { setSent(null); setErr(null); }} className="justify-self-start text-[11.5px] text-muted underline">Zmień numer lub wyślij kod ponownie</button>
@@ -273,7 +272,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
             <form className="mt-1 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (url && postal.length === 6) setFindOpen(true); }}>
               <label className="block min-w-0 flex-1">
                 <span className="sr-only">Kod pocztowy miejsca montażu</span>
-                <input data-testid="step-postal" inputMode="numeric" autoComplete="postal-code" maxLength={6} placeholder="00-000" value={postal}
+                <input data-testid="step-postal" ref={(el) => { if (el && url && !postal && !el.dataset.focused) { el.dataset.focused = '1'; setTimeout(() => el.focus(), 60); } }} inputMode="numeric" autoComplete="postal-code" maxLength={6} placeholder="00-000" value={postal}
                   onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setPostal(d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d); }} className={input} disabled={!url} />
               </label>
               <button type="submit" data-testid="open-find" disabled={!url || postal.length !== 6} className="shrink-0 rounded-full bg-ink px-4 text-[12.5px] font-medium text-white disabled:opacity-40">Znajdź wykonawców</button>
@@ -653,6 +652,7 @@ export function CtaBar({ variant }: { variant: 'panel' | 'mobile' }) {
   const role = useStudio((s) => s.role);
   const hidden = useStudio((s) => s.chromeHidden);
   const setShareOpen = useStudio((s) => s.setShareOpen);
+  if (role === 'contractor') return <ContractorCta variant={variant} />;
   if (role !== 'local' && role !== 'owner') return null;
   const button = (
     <button type="button" data-testid={variant === 'panel' ? 'cta-find' : 'cta-find-mobile'} onClick={() => setShareOpen(true)} className="shrink-0 rounded-full bg-ink px-4 py-2.5 text-[12.5px] font-medium text-white shadow-sm hover:bg-ink/85">
@@ -678,5 +678,120 @@ export function CtaBar({ variant }: { variant: 'panel' | 'mobile' }) {
         <button type="button" data-testid="cta-find-mobile" onClick={() => setShareOpen(true)} className="shrink-0 rounded-full bg-ink px-3.5 py-2.5 text-[12px] font-medium text-white">Zapisz projekt i znajdź wykonawców</button>
       </div>
     </div>
+  );
+}
+
+/** Firma w projekcie otwartym z panelu: wyraźny powrót do CRM — na lewo od logo. */
+export function CrmBackButton() {
+  const role = useStudio((s) => s.role);
+  const setCrm = useStudio((s) => s.setCrm);
+  if (role !== 'contractor') return null;
+  return (
+    <button type="button" data-testid="back-to-crm" onClick={() => setCrm(true)} aria-label="Wróć do panelu wykonawcy"
+      className="mr-2 flex shrink-0 items-center gap-1 rounded-full bg-ink py-1.5 pl-2 pr-3 text-[12.5px] font-medium text-white shadow-sm hover:bg-ink/85">
+      <ArrowLeft size={16} /> Panel
+    </button>
+  );
+}
+
+// ---------------- wykonawca w projekcie: „Wyceń i wyślij” ----------------
+
+/** Źródło: J. Oldroyd, K. McElheran, D. Elkington, „The Short Life of Online Sales Leads”, Harvard Business Review, 2011. */
+const SPEED_TIP = 'Kontakt w ciągu godziny daje ponad 60× większą szansę na rozmowę z klientem niż odpowiedź po 24 h';
+const SPEED_SRC = 'Harvard Business Review, 2011';
+
+function ContractorCta({ variant }: { variant: 'panel' | 'mobile' }) {
+  const [open, setOpen] = useState(false);
+  const button = (
+    <button type="button" data-testid={variant === 'panel' ? 'cta-quote' : 'cta-quote-mobile'} onClick={() => setOpen(true)}
+      className="w-full rounded-full bg-[#d92d20] px-4 py-3 text-[14px] font-semibold text-white shadow-[0_6px_18px_-6px_rgba(217,45,32,0.6)] hover:bg-[#b42318]">
+      Wyceń i wyślij
+    </button>
+  );
+  const tip = variant === 'panel' ? (
+    <p className="mt-1.5 text-[11px] leading-snug text-muted" data-testid="speed-tip">
+      <b className="text-ink">Wyceń w ciągu 24 h.</b> {SPEED_TIP} <span className="whitespace-nowrap">({SPEED_SRC})</span>.
+    </p>
+  ) : (
+    <p className="mt-1 text-center text-[11px] leading-snug text-muted" data-testid="speed-tip">
+      <b className="text-ink">Wyceń w 24 h</b> · szybki kontakt = do 60× większa szansa (HBR)
+    </p>
+  );
+  return (
+    <>
+      {variant === 'panel' ? (
+        <div className="sticky bottom-0 z-10 mt-auto hidden border-t border-line bg-panel/95 px-4 py-3 backdrop-blur md:block" data-testid="cta-bar-contractor">{button}{tip}</div>
+      ) : (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] backdrop-blur md:hidden" data-testid="cta-bar-contractor-mobile">{button}{tip}</div>
+      )}
+      <QuoteSendDialog open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+function QuoteSendDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const st = useStudio();
+  const [amount, setAmount] = useState('');
+  const [term, setTerm] = useState('');
+  const [msg, setMsg] = useState('Dzień dobry, przesyłam wycenę schodów zgodnie z Pana/Pani projektem. Chętnie umówię pomiar i odpowiem na pytania.');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  useEffect(() => { if (open) { setErr(null); setDone(false); } }, [open]);
+  const input = 'mt-0.5 w-full min-w-0 rounded-lg border border-line px-3 py-2 text-[14px] outline-none focus:border-oak';
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = Number(amount.replace(/\s/g, '').replace(',', '.'));
+    if (!(value > 0)) { setErr('Podaj kwotę wyceny'); return; }
+    if (!st.projectId) { setErr('Brak projektu — wróć do panelu i otwórz projekt ponownie'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.crmUpdateQuote(st.projectId, { status: 'sent', amount: value });
+      const text = `Wycena: ${value.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} zł brutto${term.trim() ? ` · termin realizacji: ${term.trim()}` : ''}${msg.trim() ? `\n\n${msg.trim()}` : ''}`;
+      if (!(await st.addComment(text, null))) throw new Error(useStudio.getState().error ?? 'Nie udało się wysłać wiadomości');
+      setDone(true);
+    } catch (ex) {
+      setErr((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal open={open} onClose={onClose}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-[15px] font-semibold">Wyceń i wyślij</div>
+          <div className="text-[12px] text-muted">Inwestor zobaczy wycenę w projekcie, a Ty — status „Wysłana” w panelu.</div>
+        </div>
+        <button type="button" onClick={onClose} className="text-muted hover:text-ink" aria-label="Zamknij"><X size={18} /></button>
+      </div>
+      {done ? (
+        <div className="mt-4 rounded-xl bg-ok-soft p-3 text-[13px]" data-testid="quote-sent">
+          <div className="font-medium">Wycena wysłana.</div>
+          <div className="mt-1 text-ink/75">Inwestor dostał ją w projekcie. Status w panelu: „Wysłana”.</div>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={() => { onClose(); st.setCrm(true); }} className="rounded-lg bg-ink px-3 py-1.5 text-[12.5px] text-white">Wróć do panelu</button>
+            <button type="button" onClick={onClose} className="rounded-lg border border-line px-3 py-1.5 text-[12.5px]">Zostań w projekcie</button>
+          </div>
+        </div>
+      ) : (
+        <form className="mt-4 grid grid-cols-1 gap-2.5" onSubmit={submit}>
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="text-[12px] text-muted">Kwota brutto (zł)
+              <input data-testid="quote-amount" autoFocus inputMode="decimal" placeholder="np. 28 500" value={amount} onChange={(e) => setAmount(e.target.value)} className={input} />
+            </label>
+            <label className="text-[12px] text-muted">Termin realizacji
+              <input data-testid="quote-term" placeholder="np. 6 tygodni" value={term} onChange={(e) => setTerm(e.target.value)} className={input} />
+            </label>
+          </div>
+          <label className="text-[12px] text-muted">Wiadomość do inwestora
+            <textarea data-testid="quote-message" rows={3} value={msg} onChange={(e) => setMsg(e.target.value)} className={input} />
+          </label>
+          {err && <div className="rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad" data-testid="quote-send-error">{err}</div>}
+          <button type="submit" data-testid="quote-send" disabled={busy} className="rounded-full bg-[#d92d20] py-3 text-[14px] font-semibold text-white hover:bg-[#b42318] disabled:opacity-60">{busy ? 'Wysyłanie…' : 'Wyślij wycenę'}</button>
+          <p className="text-[11px] text-muted">{SPEED_TIP} ({SPEED_SRC}).</p>
+        </form>
+      )}
+    </Modal>
   );
 }

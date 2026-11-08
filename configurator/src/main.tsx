@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { firstTouchSource, trackVisit } from './analytics';
+import { keepFocusedVisible } from './ui/keepFocusedVisible';
 import { useStore } from './store/store';
 
+keepFocusedVisible();
 // źródło pierwszego wejścia ustalamy, zanim wyczyścimy parametry adresu
 firstTouchSource();
 // wejście z landingu: /konfigurator/?shape=L&from=landing — ustaw wybrany układ i wyczyść adres

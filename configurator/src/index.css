@@ -80,3 +80,8 @@ input[type='range'] { accent-color: var(--color-oak); }
   select,
   textarea { font-size: 16px; }
 }
+
+/* telefon: pole w panelu po fokusie ląduje tuż pod przyklejoną sceną (nie pod nią) */
+@media (max-width: 767px) {
+  [data-testid='panel'] input, [data-testid='panel'] select, [data-testid='panel'] textarea { scroll-margin-top: calc(var(--scene-h, 46vh) + 56px); scroll-margin-bottom: 24px; }
+}

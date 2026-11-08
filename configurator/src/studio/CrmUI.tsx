@@ -63,11 +63,11 @@ export function CrmShell() {
             const active = tab === t.key;
             return (
               <button key={t.key} type="button" data-testid={`crm-tab-${t.key}`} onClick={() => setTab(t.key)} aria-current={active ? 'page' : undefined}
-                className={`relative flex flex-col items-center justify-center gap-0.5 px-0.5 pb-1.5 pt-2 text-[10px] leading-tight md:flex-row md:justify-start md:gap-2 md:rounded-lg md:px-3 md:py-2 md:text-[13px] ${active ? 'text-ink md:bg-ink md:text-white' : 'text-muted md:text-ink/80 md:hover:bg-black/5'}`}>
+                className={`relative flex flex-col items-center justify-center gap-0.5 px-0.5 pb-1.5 pt-3.5 text-[10px] leading-tight md:flex-row md:justify-start md:gap-2 md:rounded-lg md:px-3 md:py-2 md:text-[13px] ${active ? 'text-ink md:bg-ink md:text-white' : 'text-muted md:text-ink/80 md:hover:bg-black/5'}`}>
                 {active && <span className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-ink md:hidden" aria-hidden="true" />}
                 <span className="relative">
                   {t.icon}
-                  {t.key === 'quotes' && fresh > 0 && <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#2f6fd6] px-1 text-[9.5px] font-semibold text-white md:hidden">{fresh}</span>}
+                  {t.key === 'quotes' && fresh > 0 && <span className="absolute -right-2.5 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[#2f6fd6] px-1 text-[9.5px] font-semibold text-white md:hidden">{fresh}</span>}
                 </span>
                 <span className={`truncate ${active ? 'font-semibold md:font-normal' : ''}`}>{t.key === 'profile' ? <><span className="md:hidden">Profil</span><span className="hidden md:inline">{t.label}</span></> : t.label}</span>
                 {t.key === 'quotes' && fresh > 0 && <span className={`ml-auto hidden rounded-full px-1.5 text-[10.5px] font-semibold md:inline ${active ? 'bg-white text-ink' : 'bg-[#2f6fd6] text-white'}`}>{fresh}</span>}
