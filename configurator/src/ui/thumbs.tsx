@@ -1,5 +1,5 @@
 // Miniatury SVG: kształty schodów (rzut), konstrukcje (elewacja), balustrady.
-import type { RailingType, Shape, StructureType } from '../engine/types';
+import type { RailingType, Shape, StepStyle, StructureType } from '../engine/types';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
@@ -41,6 +41,24 @@ export function RailingThumb({ type }: { type: RailingType }) {
       {type === 'mesh' && (<><rect x="9" y="11" width="46" height="26" {...S} strokeWidth={1} /><path d="M9 24 L15 11 L21 24 L27 11 L33 24 L39 11 L45 24 L51 11 L55 20 M9 24 L15 37 L21 24 L27 37 L33 24 L39 37 L45 24 L51 37 L55 28" {...S} strokeWidth={0.9} /></>)}
       {type === 'solid' && <rect x="9" y="11" width="46" height="26" fill="currentColor" opacity="0.85" />}
       {type === 'glass' && (<><rect x="8" y="10" width="48" height="30" fill="#bfe3d8" opacity="0.6" stroke="#4f9c84" strokeWidth="1.4" /><circle cx="16" cy="34" r="1.6" fill="currentColor" /><circle cx="48" cy="34" r="1.6" fill="currentColor" /></>)}
+    </svg>
+  );
+}
+
+/** Mała elewacja 3 stopni dla stylu stopni. */
+export function StepStyleThumb({ style }: { style: StepStyle }) {
+  const wood = '#b8874f';
+  const clad = 'currentColor';
+  const steps = [0, 1, 2];
+  return (
+    <svg viewBox="0 0 36 28" className="h-6 w-8 shrink-0">
+      {style === 'solid' && <path d="M3 26 V22 H13 V15 H23 V8 H33 V26 Z" fill={clad} opacity="0.25" />}
+      {style === 'boxed' && <path d="M3 26 V22 H13 V15 H23 V8 H33 V14 L9 26 Z" fill={clad} opacity="0.25" />}
+      {style === 'open' || style === 'closedFront' ? <line x1="4" y1="27" x2="33" y2="10" stroke="currentColor" strokeWidth="2" /> : null}
+      {steps.map((i) => (style === 'blocks'
+        ? <rect key={i} x={3 + i * 10} y={19 - i * 7} width="11" height="7" fill={wood} />
+        : <rect key={i} x={3 + i * 10} y={20 - i * 7} width="11" height="2.2" fill={wood} />))}
+      {(style === 'closedFront' || style === 'boxed' || style === 'solid') && steps.map((i) => <rect key={`r${i}`} x={3 + i * 10} y={22.2 - i * 7} width="1.4" height="4.8" fill={clad} opacity="0.7" />)}
     </svg>
   );
 }

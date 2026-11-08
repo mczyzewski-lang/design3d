@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, animate } from 'motion/react';
-import { Link, MessageCirclePlus, Plus, Printer, BrickWall, Check, ChevronDown, Cuboid, Eye, Focus, ImageDown, Layers, Lightbulb, Moon, Rotate3d, RotateCcw, Ruler, Scissors, SquareDashed, Sun, ArrowLeftRight, PanelTop, FileDown, FileUp, Footprints } from 'lucide-react';
+import { Ellipsis, X, Link, MessageCirclePlus, Plus, Printer, BrickWall, Check, ChevronDown, Cuboid, Eye, Focus, ImageDown, Layers, Lightbulb, Moon, Rotate3d, RotateCcw, Ruler, Scissors, SquareDashed, Sun, ArrowLeftRight, PanelTop, FileDown, FileUp, Footprints } from 'lucide-react';
 import { COLLECTIONS } from '../engine/presets';
 import { WALL_LABEL } from '../engine/catalog';
 import type { WallKey } from '../engine/types';
 import { useConfig, useSolved, useStore, useView, type CameraMode, type WallMode } from '../store/store';
 import { capture, downloadDataUrl } from '../three/capture';
 import { StatusPill } from './AnalysisCard';
+import { useIsMobile } from './useIsMobile';
+import { STATUS_LABEL } from '../engine/validate';
 import { downloadJson, exportPayload, pickJsonFile } from './fileOps';
 import { openPrintView } from './print';
 import { ProjectActions } from '../studio/StudioUI';
@@ -32,7 +34,7 @@ function Menu({ label, children, testId }: { label: ReactNode; children: (close:
   }, []);
   return (
     <div className="relative" ref={ref}>
-      <button type="button" data-testid={testId} onClick={() => setOpen(!open)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13px] text-ink/80 hover:bg-black/5">
+      <button type="button" data-testid={testId} onClick={() => setOpen(!open)} className="flex items-center gap-1 rounded-lg px-1.5 py-1.5 text-[13px] sm:px-2.5 text-ink/80 hover:bg-black/5">
         {label}<ChevronDown size={14} className="text-muted" />
       </button>
       <AnimatePresence>
@@ -82,12 +84,12 @@ export function TopBar() {
     toast(url ? 'Zapisano widok (PNG)' : 'Scena jeszcze się ładuje');
   };
   return (
-    <header className="relative z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-panel/90 px-4 backdrop-blur">
-      <div className="mr-3 flex items-baseline gap-2">
-        <span className="whitespace-nowrap text-[13px] font-semibold tracking-[0.14em] sm:text-[15px] sm:tracking-[0.22em]">STAIR STUDIO</span>
+    <header className="relative z-30 flex h-14 shrink-0 items-center gap-1 border-b border-line bg-panel/90 px-3 backdrop-blur sm:gap-2 sm:px-4">
+      <div className="mr-1 flex items-baseline gap-2 sm:mr-3">
+        <span className="whitespace-nowrap text-[12px] font-semibold tracking-[0.1em] sm:text-[15px] sm:tracking-[0.22em]">STAIR STUDIO</span>
         <span className="hidden text-[11px] text-muted sm:inline">design3d.pl</span>
       </div>
-      <Menu label="Kolekcje" testId="menu-collections">
+      <Menu label={<><Layers size={15} className="sm:hidden" /><span className="hidden sm:inline">Kolekcje</span></>} testId="menu-collections">
         {(close) => (
           <>
             {COLLECTIONS.map((col) => (
@@ -107,7 +109,7 @@ export function TopBar() {
           </>
         )}
       </Menu>
-      <Menu label="Plik" testId="menu-file">
+      <Menu label={<><FileDown size={15} className="sm:hidden" /><span className="hidden sm:inline">Plik</span></>} testId="menu-file">
         {(close) => (
           <>
             <MenuItem onClick={() => { downloadJson(exportPayload(c), 'stair-studio.json'); close(); }}><FileDown size={14} /> Eksport JSON</MenuItem>
@@ -149,6 +151,7 @@ function AnimatedNumber({ value, digits = 1, suffix = '' }: { value: number; dig
 export function InfoBar() {
   const c = useConfig();
   const s = useSolved();
+  const mobile = useIsMobile();
   const fp = s.layout.footprint;
   const items: Array<[string, ReactNode, boolean?]> = [
     ['Kondygnacja', <><AnimatedNumber value={c.room.height * 100} /> cm</>],
@@ -158,6 +161,20 @@ export function InfoBar() {
     ['Nachylenie', <><AnimatedNumber value={s.calc.angleDeg} />°</>],
     ['Zajmowana przestrzeń', <><AnimatedNumber value={(fp.maxX - fp.minX) * 100} digits={0} /> × <AnimatedNumber value={(fp.maxZ - fp.minZ) * 100} digits={0} /> cm</>, true],
   ];
+  if (mobile) {
+    // telefon: małe, przezroczyste — jak najmniej zasłania schody
+    return (
+      <div className="pointer-events-none flex items-start gap-3 overlay-text" data-testid="info-bar">
+        {items.filter(([, , wide]) => !wide).map(([k, v]) => (
+          <div key={k} className="leading-tight">
+            <div className="whitespace-nowrap text-[8.5px] font-semibold uppercase tracking-[0.06em] text-ink/60">{k === 'Wysokość stopnia' ? 'Wys. stopnia' : k}</div>
+            <div className="text-[12px] font-semibold text-ink">{v}</div>
+          </div>
+        ))}
+        <span data-testid="status-pill" title={STATUS_LABEL[s.status]} className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white/80 ${s.status === 'ok' ? 'bg-ok' : s.status === 'adjust' ? 'bg-warn' : 'bg-bad'}`} />
+      </div>
+    );
+  }
   return (
     <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-line/80 bg-white/85 px-3 py-1.5 shadow-sm backdrop-blur sm:gap-x-5 sm:px-4 sm:py-2" data-testid="info-bar">
       {items.map(([k, v, wide]) => (
@@ -193,9 +210,23 @@ export function BottomBar() {
   const requestReset = useStore((s) => s.requestCameraReset);
   const [wallsOpen, setWallsOpen] = useState(false);
   const commentMode = useStudio((s) => s.commentMode);
+  const mobile = useIsMobile();
+  const [expanded, setExpanded] = useState(false);
+  const round = (active: boolean) => `pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full backdrop-blur transition ${active ? 'bg-ink/85 text-white' : 'bg-white/55 text-ink/80'} shadow-sm`;
+  if (mobile && !expanded) {
+    // telefon: tylko dzień/noc, LED i „więcej”
+    return (
+      <div className="flex items-center gap-2" data-testid="bottom-bar">
+        <button type="button" aria-label="Więcej opcji widoku" data-testid="bar-more" onClick={() => setExpanded(true)} className={round(false)}><Ellipsis size={18} /></button>
+        <button type="button" aria-label={c.lighting.night ? 'Dzień' : 'Noc'} data-testid="tool-night" onClick={() => setLighting({ night: !c.lighting.night })} className={round(c.lighting.night)}>{c.lighting.night ? <Moon size={17} /> : <Sun size={17} />}</button>
+        <button type="button" aria-label="LED" data-testid="tool-led" onClick={() => setLighting({ led: !c.lighting.led })} className={round(c.lighting.led)}><Lightbulb size={17} /></button>
+      </div>
+    );
+  }
   const tool = (active: boolean) => `flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl transition ${active ? 'bg-ink text-white' : 'text-ink/70 hover:bg-black/5'}`;
   return (
-    <div className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-2xl border border-line/80 bg-white/90 p-1.5 shadow-lg backdrop-blur" data-testid="bottom-bar">
+    <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1 rounded-2xl border border-line/80 bg-white/90 p-1.5 shadow-lg backdrop-blur" data-testid="bottom-bar">
+      {mobile && <button type="button" aria-label="Zwiń" data-testid="bar-less" onClick={() => setExpanded(false)} className={tool(false)}><X size={16} /></button>}
       {CAMERAS.map((k) => (
         <button key={k.key} type="button" data-testid={`cam-${k.key}`} onClick={() => setView({ camera: k.key })} className={`flex h-8 sm:h-9 items-center gap-1.5 rounded-xl px-2.5 sm:px-3 text-[12.5px] transition ${view.camera === k.key ? 'bg-ink text-white' : 'text-ink/75 hover:bg-black/5'}`}>
           {k.icon}<span className="hidden md:inline">{k.label}</span>

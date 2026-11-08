@@ -76,9 +76,13 @@ export interface StructureConfig {
   riserFinish: RiserFinish;
 }
 
+/** open = ażurowe, closedFront = podstopnice, boxed = zabudowa boków i spodu, solid = pełna zabudowa do posadzki, blocks = stopnie klockowe */
+export type StepStyle = 'open' | 'closedFront' | 'boxed' | 'solid' | 'blocks';
+
 export interface TreadConfig {
   wood: WoodKey;
   edge: 'square' | 'rounded';
+  style: StepStyle;
 }
 
 export interface SteelConfig {

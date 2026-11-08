@@ -39,7 +39,7 @@ export const DEFAULT_CONFIG: Config = {
     opening: { mode: 'auto', length: 3.0, width: 2.1 },
   },
   structure: { type: 'centralBeam', landingSupport: 'none', closedRisers: false, riserFinish: 'wood' },
-  treads: { wood: 'oakNatural', edge: 'square' },
+  treads: { wood: 'oakNatural', edge: 'square', style: 'open' },
   steel: { preset: 'black', color: '#141414', finish: 'powder' },
   railing: {
     type: 'verticalBars',

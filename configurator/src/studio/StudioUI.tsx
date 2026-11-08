@@ -66,8 +66,8 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
         </button>
       )}
       <div className="relative flex" ref={ref}>
-        <button type="button" data-testid="save" disabled={st.busy} onClick={save} className="flex items-center gap-2 rounded-l-full bg-ink py-1.5 pl-4 pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
-          <Save size={14} /> {st.busy ? 'Zapisywanie…' : st.role === 'contractor' ? 'Zapisz kopię' : 'Zapisz'}
+        <button type="button" data-testid="save" disabled={st.busy} onClick={save} className="flex items-center gap-2 rounded-l-full bg-ink py-1.5 pl-3 pr-2.5 sm:pl-4 sm:pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
+          <Save size={14} /> <span className={st.busy ? '' : 'hidden min-[400px]:inline'}>{st.busy ? 'Zapisywanie…' : st.role === 'contractor' ? 'Zapisz kopię' : 'Zapisz'}</span>
           {dirty && owner && <span className="h-1.5 w-1.5 rounded-full bg-[#f3a845]" title="Niezapisane zmiany" />}
         </button>
         <button type="button" data-testid="save-menu" aria-label="Więcej opcji zapisu" onClick={() => { setMenu(!menu); void st.refreshProjects(); }} className="rounded-r-full border-l border-white/20 bg-ink px-2 text-white hover:bg-ink/85">

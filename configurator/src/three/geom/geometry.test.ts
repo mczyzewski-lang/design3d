@@ -263,3 +263,49 @@ describe('szkło — mocowania i wykończenia', () => {
     expect(stairGeometryKey(c2, solve(c2))).toBe(stairGeometryKey(c, solve(c)));
   });
 });
+
+describe('style stopni', () => {
+  const build = (p: (c: Config) => void) => { const c = cfg(p); return buildStairGeometry(c, solve(c)); };
+  test('zabudowane od frontu — podstopnice także dla belki centralnej i ramy', () => {
+    for (const t of ['centralBeam', 'weldedFrame', 'sideStringers'] as const) {
+      const g = build((x) => { x.structure.type = t; x.treads.style = 'closedFront'; });
+      expect(g.meta.tags.riser).toBe(20);
+      expect(g.geoms.riser).toBeDefined();
+    }
+    expect(build(() => {}).meta.tags.riser ?? 0).toBe(0);
+  });
+  test('z podbitką: okładziny boczne + podbitka; pełna zabudowa sięga posadzki', () => {
+    const boxed = build((x) => { x.treads.style = 'boxed'; });
+    expect(boxed.meta.tags.sidePanel).toBe(4);
+    expect(boxed.meta.tags.soffit).toBeGreaterThanOrEqual(2);
+    const solid = build((x) => { x.treads.style = 'solid'; });
+    expect(solid.meta.tags.sidePanel).toBe(4);
+    expect(solid.meta.tags.soffit ?? 0).toBe(0);
+    solid.geoms.riser!.computeBoundingBox();
+    expect(solid.geoms.riser!.boundingBox!.min.y).toBeLessThanOrEqual(0.0001);
+  });
+  test('klockowe: stopień o wysokości stopnia, stal pod klockami', () => {
+    const c = cfg((x) => { x.treads.style = 'blocks'; });
+    const s = solve(c);
+    const g = buildStairGeometry(c, s);
+    expect(g.meta.tags.tread).toBe(18);
+    const mesh = new THREE.Mesh(g.geoms.steel!, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    const rc = new THREE.Raycaster();
+    let hits = 0;
+    for (const f of s.layout.flights) for (const tr of f.treadEls) {
+      const x = (tr.rect.minX + tr.rect.maxX) / 2;
+      const z = (tr.rect.minZ + tr.rect.maxZ) / 2;
+      rc.set(new THREE.Vector3(x, tr.y - 0.001, z), new THREE.Vector3(0, -1, 0));
+      rc.far = s.calc.rise - 0.014 - 0.004; // grubość klocka
+      if (rc.intersectObject(mesh).length) hits++;
+    }
+    expect(hits).toBe(0);
+  });
+  test('styl zmienia klucz geometrii, starsze closedRisers = zabudowane od frontu', () => {
+    const a = cfg();
+    const b = cfg((x) => { x.treads.style = 'boxed'; });
+    expect(stairGeometryKey(a, solve(a))).not.toBe(stairGeometryKey(b, solve(b)));
+    const legacy = build((x) => { x.structure.closedRisers = true; });
+    expect(legacy.meta.tags.riser).toBe(20);
+  });
+});

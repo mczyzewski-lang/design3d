@@ -1,5 +1,5 @@
 // Katalog: drewno, stal, konstrukcje, balustrady, limity ergonomiczne.
-import type { GlassMount, GlassTint, GlassTop, LandingSupport, RailingType, RiserFinish, SteelFinish, StructureType, WoodKey } from './types';
+import type { StepStyle, GlassMount, GlassTint, GlassTop, LandingSupport, RailingType, RiserFinish, SteelFinish, StructureType, WoodKey } from './types';
 
 export const LIMITS = {
   riserMin: 0.15,
@@ -140,3 +140,18 @@ export const RISER_FINISHES: Array<{ key: RiserFinish; label: string }> = [
   { key: 'white', label: 'Biała lakierowana' },
   { key: 'steel', label: 'W kolorze stali' },
 ];
+
+export const STEP_STYLES: Array<{ key: StepStyle; label: string; hint: string }> = [
+  { key: 'open', label: 'Ażurowe', hint: 'Otwarte — bez podstopnic, widoczna konstrukcja stalowa.' },
+  { key: 'closedFront', label: 'Zabudowane od frontu', hint: 'Podstopnice zamykają front każdego stopnia; konstrukcja widoczna z boku.' },
+  { key: 'boxed', label: 'Zabudowane z podbitką', hint: 'Podstopnice + okładzina boków i spodu wzdłuż biegu — konstrukcja ukryta.' },
+  { key: 'solid', label: 'Pełna zabudowa do posadzki', hint: 'Schody jako bryła do podłogi — miejsce na schowek lub szafę pod schodami.' },
+  { key: 'blocks', label: 'Klockowe', hint: 'Masywne stopnie o wysokości stopnia — efekt drewnianych bloków.' },
+];
+
+/** Styl stopni z uwzględnieniem starszych konfiguracji (closedRisers) i schodów kręconych. */
+export function stepStyleOf(c: { treads: { style?: StepStyle }; structure: { closedRisers: boolean }; stairs: { shape: string } }): StepStyle {
+  if (c.stairs.shape === 'S') return 'open';
+  const st = c.treads.style ?? 'open';
+  return st === 'open' && c.structure.closedRisers ? 'closedFront' : st;
+}

@@ -1,5 +1,5 @@
 // Zestawienie ilościowe (baza pod BOM) — BEZ cen.
-import { GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, railingSpec, structureSpec, woodSpec } from './catalog';
+import { GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, railingSpec, stepStyleOf, structureSpec, woodSpec } from './catalog';
 import { pathLength } from './railingLayout';
 import type { Config, Solved } from './types';
 
@@ -37,8 +37,16 @@ export function quantities(c: Config, s: Solved): QtyItem[] {
   if (L.landing) items.push({ group: 'Drewno', name: 'Okładzina spocznika', qty: r2(landingArea), unit: 'm²' });
   if (L.winder) items.push({ group: 'Drewno', name: 'Stopnie zabiegowe', qty: L.winder.treads.length, unit: 'szt.' });
   items.push({ group: 'Drewno', name: 'Objętość drewna (stopnice + spocznik)', qty: Math.round((treadArea + landingArea) * t * 1000) / 1000, unit: 'm³' });
-  const closed = c.structure.closedRisers && structureSpec(c.structure.type).closedRisersAllowed;
-  if (closed) items.push({ group: 'Drewno', name: 'Podstopnice', qty: L.flights.reduce((a, f) => a + f.risers, 0), unit: 'szt.' });
+  const style = stepStyleOf(c);
+  if (style === 'closedFront' || style === 'boxed' || style === 'solid') items.push({ group: 'Drewno', name: 'Podstopnice', qty: L.flights.reduce((a, f) => a + f.risers, 0) + (L.winder?.treads.length ?? 0), unit: 'szt.' });
+  if (style === 'blocks') items.push({ group: 'Drewno', name: 'Stopnie klockowe (masywne)', qty: treads, unit: 'szt.' });
+  if (style === 'boxed' || style === 'solid') {
+    const side = L.flights.reduce((a, f) => {
+      const slope = Math.hypot(f.length, f.topY - f.baseY);
+      return a + (style === 'solid' ? 2 * f.length * (f.baseY + (f.topY - f.baseY) / 2) : 2 * slope * 0.35 + slope * f.width);
+    }, 0);
+    items.push({ group: 'Zabudowa', name: style === 'solid' ? 'Okładzina pełnej zabudowy do posadzki' : 'Okładzina boków i podbitka', qty: r2(side), unit: 'm²' });
+  }
 
   const slope = L.flights.reduce((a, f) => a + Math.hypot(f.length, f.topY - f.baseY), 0);
   const st = c.structure.type;

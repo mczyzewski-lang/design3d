@@ -1,7 +1,7 @@
 // Prawy panel: karta analizy + zwijane sekcje 1–8.
 import { useMemo, useState } from 'react';
 import { ArrowRight, Braces } from 'lucide-react';
-import { ENTRY_LABEL, FINISHES, GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, RISER_FINISHES, LANDING_SUPPORTS, RAILINGS, SHAPE_LABEL, STEEL_PRESETS, STRUCTURES, SUPPORT_TAG_LABEL, WALL_LABEL, WOODS, railingSpec, structureSpec } from '../engine/catalog';
+import { STEP_STYLES, stepStyleOf, ENTRY_LABEL, FINISHES, GLASS_MOUNTS, GLASS_TINTS, GLASS_TOPS, RISER_FINISHES, LANDING_SUPPORTS, RAILINGS, SHAPE_LABEL, STEEL_PRESETS, STRUCTURES, SUPPORT_TAG_LABEL, WALL_LABEL, WOODS, railingSpec, structureSpec } from '../engine/catalog';
 import { cm } from '../engine/validate';
 import { quantities } from '../engine/quantities';
 import type { EntryDir, SideMode, WallKey } from '../engine/types';
@@ -10,7 +10,7 @@ import { woodSwatch } from '../three/woodCanvas';
 import { AnalysisCard } from './AnalysisCard';
 import { CommentsCard } from '../studio/StudioUI';
 import { Field, Section, Segmented, SliderField, Thumb, Toggle } from './controls';
-import { RailingThumb, ShapeThumb, StructureThumb } from './thumbs';
+import { RailingThumb, ShapeThumb, StepStyleThumb, StructureThumb } from './thumbs';
 import { downloadJson, exportPayload } from './fileOps';
 
 // domyślny profil i rozstaw przy zmianie typu balustrady
@@ -26,7 +26,7 @@ export function Panel() {
   const [open, setOpen] = useState<number>(1);
   const t = (i: number) => setOpen(open === i ? 0 : i);
   return (
-    <aside className="flex h-full flex-col overflow-y-auto scrollbar-thin bg-panel" data-testid="panel">
+    <aside className="flex flex-col bg-panel scrollbar-thin md:h-full md:overflow-y-auto" data-testid="panel">
       <AnalysisCard />
       <CommentsCard />
       <Section index={1} title="Typ schodów" open={open === 1} onToggle={() => t(1)}><TypeSection /></Section>
@@ -181,12 +181,6 @@ function StructureSection() {
         ))}
       </div>
       <p className="mt-2 text-[11.5px] text-muted">{c.stairs.shape === 'S' ? 'Schody kręcone mają własną konstrukcję: kolumnę centralną Ø120 mm, stopnie na tulejach dystansowych i ramionach oraz górny podest. Wybór konstrukcji dotyczy schodów prostych i łamanych.' : spec.description}</p>
-      {(spec.closedRisersAllowed || c.stairs.turnType === 'winders') && c.stairs.shape !== 'S' && <Toggle label="Zamknięte podstopnice" checked={st.closedRisers} onChange={(v) => setStructure({ closedRisers: v })} />}
-      {st.closedRisers && c.stairs.shape !== 'S' && (
-        <Field label="Wykończenie podstopnic">
-          <Segmented value={st.riserFinish} onChange={(v) => setStructure({ riserFinish: v })} size="sm" options={RISER_FINISHES.map((r) => ({ value: r.key, label: r.label }))} />
-        </Field>
-      )}
       {(c.stairs.shape === 'L' || c.stairs.shape === 'U') && c.stairs.turnType === 'landing' && (
         <Field label="Podparcie spocznika">
           <div className="grid grid-cols-2 gap-1">
@@ -203,11 +197,31 @@ function StructureSection() {
 function TreadsSection() {
   const c = useConfig();
   const setTreads = useStore((s) => s.setTreads);
+  const setStructure = useStore((s) => s.setStructure);
+  const style = stepStyleOf(c);
   const setStairs = useStore((s) => s.setStairs);
   const setLighting = useStore((s) => s.setLighting);
   const swatches = useMemo(() => Object.fromEntries(WOODS.map((w) => [w.key, woodSwatch(w.key)])), []);
   return (
     <div>
+      {c.stairs.shape !== 'S' && (
+        <Field label="Styl stopni">
+          <div className="grid grid-cols-2 gap-1.5">
+            {STEP_STYLES.map((st) => (
+              <button key={st.key} type="button" data-testid={`step-${st.key}`} title={st.hint} onClick={() => { setTreads({ style: st.key }); setStructure({ closedRisers: false }); }}
+                className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-[11.5px] leading-tight ${style === st.key ? 'border-oak bg-oak-soft/60' : 'border-line'}`}>
+                <StepStyleThumb style={st.key} />{st.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">{STEP_STYLES.find((x) => x.key === style)!.hint}</p>
+        </Field>
+      )}
+      {(style === 'closedFront' || style === 'boxed' || style === 'solid') && (
+        <Field label={style === 'closedFront' ? 'Wykończenie podstopnic' : 'Wykończenie zabudowy'}>
+          <Segmented value={c.structure.riserFinish} onChange={(v) => setStructure({ riserFinish: v })} size="sm" options={RISER_FINISHES.map((r) => ({ value: r.key, label: r.label }))} />
+        </Field>
+      )}
       <div className="grid grid-cols-4 gap-2">
         {WOODS.map((w) => (
           <button key={w.key} type="button" data-testid={`wood-${w.key}`} onClick={() => setTreads({ wood: w.key })} className={`flex flex-col items-center gap-1 rounded-lg p-1 ${c.treads.wood === w.key ? 'ring-2 ring-oak' : ''}`} title={w.label}>

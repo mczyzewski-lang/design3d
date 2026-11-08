@@ -1,8 +1,8 @@
 // Stal + stopnice + spocznik dla 5 konstrukcji. Każdy bieg budowany w układzie biegu
 // (x = lewa ręka, y = góra, z = kierunek marszu; początek na linii pierwszego podnoszenia, środek szerokości).
 import * as THREE from 'three';
-import { LIMITS } from '../../engine/catalog';
-import type { Config, FlightEl, Solved, StructureType, WallKey } from '../../engine/types';
+import { LIMITS, stepStyleOf } from '../../engine/catalog';
+import type { Config, FlightEl, Solved, StepStyle, StructureType, WallKey } from '../../engine/types';
 import { Parts, beam, boxMinMax, clipHalf, cyl, extrudePlan, extrudeZY, seeded, type MatKey, type P2 } from './primitives';
 
 export interface PostInfo { x: number; z: number; yBottom: number; yTop: number; kind: 'landing' | 'intermediate' }
@@ -26,7 +26,7 @@ export interface StairGeometry {
 
 /** Klucz geometrii schodów — bez materiałów (zmiana drewna/koloru nie przebudowuje). */
 export function stairGeometryKey(c: Config, s: Solved): string {
-  return JSON.stringify([s.key, c.structure.type, c.structure.landingSupport, c.structure.closedRisers, c.treads.edge]);
+  return JSON.stringify([s.key, c.structure.type, c.structure.landingSupport, c.structure.closedRisers, c.treads.edge, stepStyleOf(c)]);
 }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -48,7 +48,7 @@ export function stringerSpec(type: StructureType, w: number): { xs: number[]; sw
   }
 }
 
-interface Ctx { c: Config; s: Solved; P: Parts; t: number; nz: number; rounded: number; uvSeed: number; postsOut: PostInfo[] }
+interface Ctx { c: Config; s: Solved; P: Parts; t: number; nz: number; rounded: number; uvSeed: number; postsOut: PostInfo[]; style: StepStyle }
 
 function addTread(ctx: Ctx, m: THREE.Matrix4, x0: number, x1: number, i: number, h: number, sg: number, flight: number) {
   const g = boxMinMax(x0, x1, i * h - ctx.t, i * h, (i - 1) * sg - ctx.nz, i * sg, {
@@ -123,7 +123,7 @@ function buildFlight(ctx: Ctx, f: FlightEl) {
   const cos = Math.cos(theta);
   const topRel = f.topY - f.baseY;
   const spec = stringerSpec(type, w);
-  const closed = c.structure.closedRisers && type !== 'centralBeam' && type !== 'weldedFrame';
+  const closed = ctx.style === 'closedFront' || ctx.style === 'boxed' || ctx.style === 'solid';
   const yMinPlate = f.startsAtLanding ? -0.3 : 0;
   const plateStartZ = f.startsAtLanding ? 0 : -ctx.nz - 0.01;
 
@@ -151,6 +151,7 @@ function buildFlight(ctx: Ctx, f: FlightEl) {
     anchorFoot(0);
     anchorTop(0);
     for (let i = 1; i <= n - 1; i++) addTread(ctx, m, -w / 2, w / 2, i, h, sg, f.index);
+    if (closed) addRisers(ctx, m, f, -w / 2 + 0.005, w / 2 - 0.005);
   } else if (type === 'sideStringers') {
     const cTop = h + 0.05;
     const Dv = spec.sh / cos;
@@ -231,6 +232,7 @@ function buildFlight(ctx: Ctx, f: FlightEl) {
       }
       addTread(ctx, m, -w / 2, w / 2, i, h, sg, f.index);
     }
+    if (closed) addRisers(ctx, m, f, -w / 2 + 0.005, w / 2 - 0.005);
     // słupy pośrednie pod długimi biegami
     if (L > 1.6) {
       const cnt = Math.floor(L / 1.6);
@@ -254,7 +256,7 @@ function landingStructure(ctx: Ctx, meta: StairMeta) {
   if (!Ld) return;
   const r = Ld.rect;
   const y = Ld.y;
-  const t = ctx.t;
+  const t = c.stairs.treadThickness; // spocznik zawsze z płyty, także przy stopniach klockowych
   const support = c.structure.landingSupport;
   const depth = support === 'none' ? 0.2 : 0.14;
   const bw = 0.06;
@@ -331,12 +333,14 @@ function landingStructure(ctx: Ctx, meta: StairMeta) {
 export function buildStairGeometry(c: Config, s: Solved): StairGeometry {
   const P = new Parts();
   const postsOut: PostInfo[] = [];
-  const ctx: Ctx = { c, s, P, t: c.stairs.treadThickness, nz: c.stairs.nosing, rounded: c.treads.edge === 'rounded' ? 0.008 : 0, uvSeed: 0, postsOut };
+  const style = stepStyleOf(c);
+  const ctx: Ctx = { c, s, P, style, t: style === 'blocks' ? s.calc.rise - 0.014 : c.stairs.treadThickness, /* klocki: 14 mm cienia nad płytą kotwiącą */ nz: c.stairs.nosing, rounded: c.treads.edge === 'rounded' ? 0.008 : 0, uvSeed: 0, postsOut };
   const meta: StairMeta = { structure: c.structure.type, elements: 0, steelElements: 0, woodElements: 0, posts: postsOut, continuousBeams: 0, landingFrame: false, wallAnchors: 0, tags: P.counts };
   if (s.layout.spiral) buildSpiral(ctx, meta);
   for (const f of s.layout.flights) buildFlight(ctx, f);
   landingStructure(ctx, meta);
   if (s.layout.winder) buildWinders(ctx, meta);
+  if (style === 'boxed' || style === 'solid') buildCladding(ctx, meta);
   meta.steelElements = P.elementCount('steel');
   meta.woodElements = P.elementCount('wood');
   meta.elements = P.elementCount();
@@ -360,7 +364,7 @@ function buildWinders(ctx: Ctx, meta: StairMeta) {
     const p0 = new THREE.Vector3(a.x + dir.x * 0.08, tr.y - t - 0.004, a.z + dir.z * 0.08);
     const p1 = new THREE.Vector3(b.x - dir.x * 0.03, tr.y - t - 0.004, b.z - dir.z * 0.03);
     P.add('led', beam(p0, p1, 0.012, 0.005), undefined, 'led');
-    if (c.structure.closedRisers) {
+    if (ctx.style === 'closedFront' || ctx.style === 'boxed' || ctx.style === 'solid') {
       const r0 = new THREE.Vector3(a.x, tr.y - c.stairs.treadThickness - (s.calc.rise - t) / 2, a.z);
       const r1 = new THREE.Vector3(b.x, r0.y, b.z);
       P.add('riser', beam(r0, r1, 0.018, s.calc.rise - t), undefined, 'riser');
@@ -393,7 +397,7 @@ function buildWinders(ctx: Ctx, meta: StairMeta) {
 function buildSpiral(ctx: Ctx, meta: StairMeta) {
   const { P, c, s } = ctx;
   const sp = s.layout.spiral!;
-  const t = ctx.t;
+  const t = c.stairs.treadThickness;
   const H = c.room.height;
   const h = s.calc.rise;
   const C = sp.center;
@@ -423,5 +427,62 @@ function buildSpiral(ctx: Ctx, meta: StairMeta) {
   P.add('steel', boxMinMax(pr.minX, pr.maxX, H - t - fd, H - t, pr.maxZ - 0.04, pr.maxZ), undefined, 'platformFrame');
   P.add('steel', boxMinMax(pr.minX, pr.minX + 0.04, H - t - fd, H - t, pr.minZ, pr.maxZ), undefined, 'platformFrame');
   P.add('steel', boxMinMax(pr.maxX - 0.04, pr.maxX, H - t - fd, H - t, pr.minZ, pr.maxZ), undefined, 'platformFrame');
+  meta.landingFrame = true;
+}
+
+/**
+ * Zabudowa: okładziny boczne biegów (górna krawędź po obrysie stopni) i podbitka wzdłuż spadku (boxed)
+ * albo pełna bryła do posadzki (solid); spocznik z okładziną czoła / do posadzki.
+ */
+function buildCladding(ctx: Ctx, meta: StairMeta) {
+  const { P, c, s, style } = ctx;
+  const th = 0.018;
+  const t = ctx.t;
+  const nz = ctx.nz;
+  for (const f of s.layout.flights) {
+    const m = flightMatrix(f);
+    const h = f.rise;
+    const sg = f.going;
+    const n = f.risers;
+    const L = f.length;
+    const k = h / sg;
+    const topRel = f.topY - f.baseY;
+    const Dv = 0.26 / Math.cos(Math.atan(k));
+    const zs = f.startsAtLanding ? 0 : -nz;
+    // obrys górny: czoła i powierzchnie stopni
+    const top: P2[] = [[zs, f.startsAtLanding ? 0 : 0]];
+    for (let i = 1; i <= n - 1; i++) {
+      const z0 = i === 1 ? zs : (i - 1) * sg - nz;
+      top.push([z0, i * h], [Math.min(L, i * sg - (i < n - 1 ? nz : 0)), i * h]);
+    }
+    top.push([L, topRel - (f.endsAtLanding ? 0 : 0.001)]);
+    let poly: P2[];
+    if (style === 'solid') {
+      const yF = -f.baseY;
+      poly = [[zs, yF], ...top, [L, yF]];
+    } else {
+      const low = (z: number) => k * z - t - Dv;
+      const yMin = f.startsAtLanding ? -0.3 : 0;
+      const zFloor = Math.max(zs, (yMin + t + Dv) / k);
+      poly = [[zs, yMin], ...top, [L, Math.max(yMin, low(L))], [zFloor, yMin]];
+      // podbitka (spód) wzdłuż spadku
+      const zA = zFloor;
+      const a = new THREE.Vector3(0, Math.max(yMin, low(zA)) - th / 2, zA).applyMatrix4(m);
+      const b = new THREE.Vector3(0, low(L) - th / 2, L).applyMatrix4(m);
+      P.add('riser', beam(a, b, f.width + 2 * th, th), undefined, 'soffit');
+    }
+    for (const x0 of [f.width / 2, -f.width / 2 - th]) P.add('riser', extrudeZY(poly, x0, th), m, 'sidePanel');
+  }
+  const Ld = s.layout.landing;
+  if (Ld) {
+    const r = Ld.rect;
+    const yTop = Ld.y - c.stairs.treadThickness;
+    const yBot = style === 'solid' ? 0 : yTop - 0.3;
+    P.add('riser', boxMinMax(r.minX - th, r.maxX + th, yBot, yTop, r.minZ - th, r.minZ), undefined, 'landingFascia');
+    P.add('riser', boxMinMax(r.minX - th, r.maxX + th, yBot, yTop, r.maxZ, r.maxZ + th), undefined, 'landingFascia');
+    P.add('riser', boxMinMax(r.minX - th, r.minX, yBot, yTop, r.minZ, r.maxZ), undefined, 'landingFascia');
+    P.add('riser', boxMinMax(r.maxX, r.maxX + th, yBot, yTop, r.minZ, r.maxZ), undefined, 'landingFascia');
+    if (style === 'boxed') P.add('riser', boxMinMax(r.minX, r.maxX, yBot - th, yBot, r.minZ, r.maxZ), undefined, 'soffit');
+  }
   meta.landingFrame = true;
 }
