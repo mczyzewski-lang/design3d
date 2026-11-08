@@ -164,10 +164,10 @@ export function InfoBar() {
   if (mobile) {
     // telefon: małe, przezroczyste — jak najmniej zasłania schody
     return (
-      <div className="pointer-events-none flex items-start gap-3 overlay-text" data-testid="info-bar">
+      <div className="pointer-events-none flex items-start gap-3 rounded-xl bg-white/65 px-2.5 py-1.5 shadow-sm backdrop-blur-sm" data-testid="info-bar">
         {items.filter(([, , wide]) => !wide).map(([k, v]) => (
           <div key={k} className="leading-tight">
-            <div className="whitespace-nowrap text-[8.5px] font-semibold uppercase tracking-[0.06em] text-ink/60">{k === 'Wysokość stopnia' ? 'Wys. stopnia' : k}</div>
+            <div className="whitespace-nowrap text-[8.5px] font-semibold uppercase tracking-[0.06em] text-ink/65">{k === 'Wysokość stopnia' ? 'Wys. stopnia' : k}</div>
             <div className="text-[12px] font-semibold text-ink">{v}</div>
           </div>
         ))}
