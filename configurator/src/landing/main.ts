@@ -1,6 +1,7 @@
 // Landing Stair Studio: licznik wejść, wybór układu, dołączenie wykonawcy (bez frameworka — szybkie ładowanie).
 import './landing.css';
 import { firstTouchSource, trackLandingShape, trackVisit } from '../analytics';
+import { consentShort } from '../studio/consentShort';
 
 firstTouchSource();
 trackVisit('landing');
@@ -12,8 +13,29 @@ document.querySelectorAll<HTMLAnchorElement>('[data-shape]').forEach((a) => {
 // treść zgody z serwera (ta sama, która zostanie zapisana przy rejestracji)
 fetch('/api/studio/me', { credentials: 'same-origin' })
   .then((r) => (r.ok ? r.json() : null))
-  .then((m) => { const el = document.getElementById('leads-text'); if (m?.texts?.leads && el) el.textContent = m.texts.leads; })
+  .then((m) => { if (m?.texts?.leads) setConsent(m.texts.leads); })
   .catch(() => {});
+
+/** Długa zgoda: skrót z „…” i „rozwiń” (kliknięcie nie zaznacza checkboxa). */
+function setConsent(full: string): void {
+  const el = document.getElementById('leads-text');
+  if (!el) return;
+  const short = consentShort(full);
+  let open = false;
+  const render = () => {
+    el.textContent = `${open ? full : short} `;
+    if (short === full) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = open ? 'zwiń' : 'rozwiń';
+    b.className = 'whitespace-nowrap font-medium text-oak underline underline-offset-2';
+    b.setAttribute('aria-expanded', String(open));
+    b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); open = !open; render(); });
+    el.append(b);
+  };
+  render();
+}
+setConsent(document.getElementById('leads-text')?.textContent ?? '');
 
 const form = document.getElementById('contractor-form') as HTMLFormElement | null;
 if (form) {

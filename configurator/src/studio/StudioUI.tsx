@@ -6,6 +6,7 @@ import { Check, ChevronDown, Copy, HardHat, House, KeyRound, Lock, Mail, Message
 import { useConfig } from '../store/store';
 import { isDirty, useStudio } from './studioStore';
 import { api, type NearbyDto } from './api';
+import { ConsentText } from './Consent';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -212,7 +213,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
                 {phoneInput.replace(/\D/g, '').length >= 9 && (
                   <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
                     <input data-testid="phone-consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" />
-                    <span>{phoneConsentText || 'Wyrażam zgodę na przetwarzanie moich danych (imię, nazwisko, numer telefonu) przez design3d.pl w celu zapisania projektu i kontaktu w sprawie wyceny.'}</span>
+                    <ConsentText testId="phone-consent-text" text={phoneConsentText || 'Wyrażam zgodę na przetwarzanie moich danych (imię, nazwisko, numer telefonu) przez design3d.pl w celu zapisania projektu i kontaktu w sprawie wyceny.'} />
                   </label>
                 )}
               </form>
@@ -434,11 +435,11 @@ export function ShareGate() {
             {field('phone', 'Telefon', 'tel', 'tel')}
             <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
               <input data-testid="gate-consent" type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5" />
-              <span>{gate.consentText}</span>
+              <ConsentText testId="gate-consent-text" text={gate.consentText} />
             </label>
             <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
               <input data-testid="gate-leads" type="checkbox" checked={form.leads} onChange={(e) => setForm({ ...form, leads: e.target.checked })} className="mt-0.5" />
-              <span><span className="font-medium text-ink">{gate.leadsText}</span> <span className="text-muted">(dobrowolne, możesz zrezygnować w każdej chwili)</span></span>
+              <span className="text-ink"><ConsentText testId="gate-leads-text" text={gate.leadsText} extra={<span className="text-muted"> (dobrowolne)</span>} /></span>
             </label>
             {form.leads && (
               <div className="grid grid-cols-2 gap-2.5 rounded-xl bg-paper p-2.5">
@@ -629,7 +630,7 @@ export function FindContractorDialog({ open, onClose, initialPostal }: { open: b
                 <p className="-mt-1 text-[11px] text-muted">Wystarczy e-mail albo telefon. Dane kontaktowe wykonawców nie są publiczne — zapytanie przekazujemy my.</p>
                 <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
                   <input data-testid="quote-consent" type="checkbox" checked={contact.consent} onChange={(e) => setContact({ ...contact, consent: e.target.checked })} className="mt-0.5" />
-                  <span>{consentText || 'Wyrażam zgodę na przekazanie projektu i kontaktu wykonawcom z mojej okolicy.'}</span>
+                  <ConsentText testId="quote-consent-text" text={consentText || 'Wyrażam zgodę na przekazanie projektu i kontaktu wykonawcom z mojej okolicy.'} />
                 </label>
                 {errors.length > 0 && <div className="rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad" data-testid="quote-errors">{errors.join('. ')}</div>}
                 <button type="submit" data-testid="quote-submit" disabled={busy} className="rounded-2xl bg-ink py-3 text-[14px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">

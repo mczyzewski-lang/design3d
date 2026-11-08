@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Box, CalendarDays, ChevronRight, FileSignature, Inbox, Lock, Mail, Phone, Plus, Settings, Sparkles, Users } from 'lucide-react';
 import { api, type CrmOverview, type CrmQuote, type QuoteStatus } from './api';
 import { useStudio } from './studioStore';
+import { ConsentText } from './Consent';
 
 type Tab = 'quotes' | 'contacts' | 'contracts' | 'calendar' | 'email' | 'profile';
 const TABS: Array<{ key: Tab; label: string; icon: ReactNode }> = [
@@ -260,7 +261,7 @@ function Profile({ data, reload }: { data: CrmOverview; reload: () => Promise<vo
           <label className="text-[12px] text-muted">E-mail<input value={me.email} disabled className={`${input} bg-paper text-muted`} /></label>
         </div>
         <label className="text-[12px] text-muted">Telefon<input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={input} /></label>
-        <label className="flex items-start gap-2 text-[12px] leading-snug text-ink/80"><input type="checkbox" checked={f.leads} onChange={(e) => setF({ ...f, leads: e.target.checked })} className="mt-0.5" /><span>{data.leadsText}</span></label>
+        <label className="flex items-start gap-2 text-[12px] leading-snug text-ink/80"><input type="checkbox" checked={f.leads} onChange={(e) => setF({ ...f, leads: e.target.checked })} className="mt-0.5" /><ConsentText text={data.leadsText} /></label>
         {f.leads && (
           <div className="grid grid-cols-2 gap-3">
             <label className="text-[12px] text-muted">Kod pocztowy firmy<input value={f.postalCode} onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setF({ ...f, postalCode: d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d }); }} className={input} /></label>
