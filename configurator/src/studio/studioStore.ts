@@ -30,6 +30,15 @@ function uploadThumbnail(id: string): void {
 }
 
 interface StudioState {
+  /** okno „Zapisz i udostępnij” (otwierane z nagłówka i z karty „Znajdź wykonawców”) */
+  shareOpen: boolean;
+  setShareOpen: (v: boolean) => void;
+  /** potwierdzony numer telefonu tej przeglądarki („logowanie numerem”) */
+  phone: string | null;
+  loadMe: () => Promise<void>;
+  /** wysyła kod SMS; w trybie testowym (brak bramki) zwraca kod do pokazania */
+  startPhone: (phone: string) => Promise<{ error: string } | { phone: string; testCode?: string }>;
+  verifyPhone: (phone: string, code: string) => Promise<string | null>;
   projectId: string | null;
   name: string;
   version: number;
@@ -93,8 +102,33 @@ export const useStudio = create<StudioState>((set, get) => ({
   pendingPin: null,
   activeComment: null,
   myProjects: [],
+  phone: null,
+  shareOpen: false,
+  setShareOpen: (v) => set({ shareOpen: v }),
+  loadMe: async () => {
+    try { set({ phone: (await api.me()).phone }); } catch { /* offline */ }
+  },
+  startPhone: async (phone) => {
+    try {
+      const r = await api.phoneStart(phone);
+      return { phone: r.phone, testCode: r.testCode };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
+  verifyPhone: async (phone, code) => {
+    try {
+      const r = await api.phoneVerify(phone, code);
+      set({ phone: r.phone });
+      void get().refreshProjects();
+      return null;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  },
 
   init: async () => {
+    void get().loadMe();
     const m = /\/konfigurator\/p\/([A-Za-z0-9_-]+)/.exec(location.pathname);
     try {
       if (m) {

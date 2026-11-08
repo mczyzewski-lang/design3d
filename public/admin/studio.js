@@ -57,6 +57,7 @@ function render(s) {
       ${kpi('Wejścia do konfiguratora', fmt(p.configuratorVisits), 'sesje w okresie')}
       ${kpi('Otwarcia linków udostępnienia', fmt(p.shareViews), 'przez osoby bez dostępu')}
       ${kpi('Zgłoszenia „Znajdź wykonawcę”', fmt(p.quoteRequests), `łącznie ${fmt(t.quoteRequests)}`, p.quoteRequests ? 'warn' : '')}
+      ${kpi('Potwierdzone numery telefonu', fmt(t.phones), `projekty z numerem: ${fmt(t.projectsWithPhone)} (${pct(t.projectsWithPhone, t.projects)})`)}
       ${kpi('Udostępnione projekty', fmt(t.shared), `${pct(t.shared, t.projects)} wszystkich projektów`)}
       ${kpi('Zgoda na zapytania z okolicy', fmt(t.leadsOptIn), `${pct(t.leadsOptIn, t.contractors)} wykonawców`)}
       ${kpi('Wersje / komentarze', `${fmt(t.versions)} / ${fmt(t.comments)}`, `komentarze w okresie: ${fmt(p.comments)}`)}

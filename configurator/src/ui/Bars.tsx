@@ -1,19 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, animate } from 'motion/react';
-import { Ellipsis, X, Link, MessageCirclePlus, Plus, Printer, BrickWall, Check, ChevronDown, Cuboid, Eye, Focus, ImageDown, Layers, Lightbulb, Moon, Rotate3d, RotateCcw, Ruler, Scissors, SquareDashed, Sun, ArrowLeftRight, PanelTop, FileDown, FileUp, Footprints } from 'lucide-react';
-import { COLLECTIONS } from '../engine/presets';
+import { Ellipsis, X, MessageCirclePlus, BrickWall, Check, Cuboid, Eye, Focus, Layers, Lightbulb, Moon, Rotate3d, RotateCcw, Ruler, Scissors, SquareDashed, Sun, ArrowLeftRight, PanelTop, Footprints } from 'lucide-react';
 import { WALL_LABEL } from '../engine/catalog';
 import type { WallKey } from '../engine/types';
 import { useConfig, useSolved, useStore, useView, type CameraMode, type WallMode } from '../store/store';
-import { capture, downloadDataUrl } from '../three/capture';
 import { StatusPill } from './AnalysisCard';
 import { useIsMobile } from './useIsMobile';
 import { STATUS_LABEL } from '../engine/validate';
-import { downloadJson, exportPayload, pickJsonFile } from './fileOps';
-import { openPrintView } from './print';
 import { ProjectActions } from '../studio/StudioUI';
 import { useStudio } from '../studio/studioStore';
-import { shareUrl } from '../engine/share';
 
 function useToast() {
   const [msg, setMsg] = useState<string | null>(null);
@@ -24,29 +19,6 @@ function useToast() {
   return [setMsg, node] as const;
 }
 
-function Menu({ label, children, testId }: { label: ReactNode; children: (close: () => void) => ReactNode; testId?: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-  return (
-    <div className="relative" ref={ref}>
-      <button type="button" data-testid={testId} onClick={() => setOpen(!open)} className="flex items-center gap-1 rounded-lg px-1.5 py-1.5 text-[13px] sm:px-2.5 text-ink/80 hover:bg-black/5">
-        {label}<ChevronDown size={14} className="text-muted" />
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }} className="absolute left-0 top-full z-40 mt-1 min-w-[240px] rounded-xl border border-line bg-white p-1.5 shadow-xl">
-            {children(() => setOpen(false))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
 
 const MenuItem = ({ onClick, children, active }: { onClick: () => void; children: ReactNode; active?: boolean }) => (
   <button type="button" onClick={onClick} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12.5px] hover:bg-paper">
@@ -55,73 +27,14 @@ const MenuItem = ({ onClick, children, active }: { onClick: () => void; children
 );
 
 export function TopBar() {
-  const c = useConfig();
-  const collection = useStore((s) => s.collection);
-  const reset = useStore((s) => s.reset);
-  const load = useStore((s) => s.load);
-  const userCollections = useStore((s) => s.userCollections);
-  const saveCollection = useStore((s) => s.saveCollection);
-  const applyUserCollection = useStore((s) => s.applyUserCollection);
-  const deleteCollection = useStore((s) => s.deleteCollection);
   const [toast, toastNode] = useToast();
-  const share = async () => {
-    const url = shareUrl(c, location.href);
-    history.replaceState(null, '', url);
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('Skopiowano link do tej konfiguracji');
-    } catch {
-      toast('Link jest w pasku adresu — skopiuj go');
-    }
-  };
-  const printCard = () => {
-    const img = capture.fn?.() ?? null;
-    if (!openPrintView(c, img, shareUrl(c, location.href))) toast('Przeglądarka zablokowała okno wydruku');
-  };
-  const png = () => {
-    const url = capture.fn?.();
-    if (url) downloadDataUrl(url, 'stair-studio.png');
-    toast(url ? 'Zapisano widok (PNG)' : 'Scena jeszcze się ładuje');
-  };
   return (
     <header className="relative z-30 flex h-14 shrink-0 items-center gap-1 border-b border-line bg-panel/90 px-3 backdrop-blur sm:gap-2 sm:px-4">
       <div className="mr-1 flex items-baseline gap-2 sm:mr-3">
         <span className="whitespace-nowrap text-[12px] font-semibold tracking-[0.1em] sm:text-[15px] sm:tracking-[0.22em]">STAIR STUDIO</span>
         <span className="hidden text-[11px] text-muted sm:inline">design3d.pl</span>
       </div>
-      <Menu label={<><Layers size={15} className="sm:hidden" /><span className="hidden sm:inline">Kolekcje</span></>} testId="menu-collections">
-        {(close) => (
-          <>
-            {COLLECTIONS.map((col) => (
-              <MenuItem key={col.key} active={c.collection === col.key} onClick={() => { collection(col.key); close(); }}>
-                <div><div className="font-medium">{col.label}</div><div className="text-[11px] text-muted">{col.description}</div></div>
-              </MenuItem>
-            ))}
-            {userCollections.length > 0 && <div className="mx-2.5 mt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">Moje kolekcje</div>}
-            {userCollections.map((col) => (
-              <div key={col.key} className="flex items-center">
-                <MenuItem active={c.collection === col.key} onClick={() => { applyUserCollection(col.key); close(); }}><span className="font-medium">{col.label}</span></MenuItem>
-                <button type="button" title="Usuń kolekcję" onClick={() => deleteCollection(col.key)} className="px-2 text-[13px] text-muted hover:text-bad">✕</button>
-              </div>
-            ))}
-            <div className="my-1 border-t border-line" />
-            <MenuItem onClick={() => { const n = prompt('Nazwa kolekcji (styl: konstrukcja, drewno, stal, balustrada, oświetlenie):'); if (n?.trim()) { saveCollection(n.trim()); toast('Zapisano kolekcję'); } close(); }}><Plus size={14} /> Zapisz bieżący styl jako kolekcję…</MenuItem>
-          </>
-        )}
-      </Menu>
-      <Menu label={<><FileDown size={15} className="sm:hidden" /><span className="hidden sm:inline">Plik</span></>} testId="menu-file">
-        {(close) => (
-          <>
-            <MenuItem onClick={() => { downloadJson(exportPayload(c), 'stair-studio.json'); close(); }}><FileDown size={14} /> Eksport JSON</MenuItem>
-            <MenuItem onClick={() => { pickJsonFile().then((d) => { load(d); toast('Zaimportowano konfigurację'); }).catch((e) => toast(e.message)); close(); }}><FileUp size={14} /> Import JSON</MenuItem>
-            <MenuItem onClick={() => { png(); close(); }}><ImageDown size={14} /> Zrzut PNG</MenuItem>
-            <MenuItem onClick={() => { void share(); close(); }}><Link size={14} /> Kopiuj szybki link (bez zapisu)</MenuItem>
-            <MenuItem onClick={() => { printCard(); close(); }}><Printer size={14} /> Karta projektu (druk / PDF)</MenuItem>
-            <div className="my-1 border-t border-line" />
-            <MenuItem onClick={() => { reset(); close(); toast('Przywrócono konfigurację domyślną'); }}><RotateCcw size={14} /> Reset</MenuItem>
-          </>
-        )}
-      </Menu>
+      {/* menu „Kolekcje” i „Plik” (pobieranie plików) tymczasowo ukryte — patrz README */}
       <div className="flex-1" />
       <ProjectActions toast={toast} />
       {toastNode}

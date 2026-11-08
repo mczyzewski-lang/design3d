@@ -125,3 +125,26 @@ CREATE TABLE IF NOT EXISTS studio_quote_request_contractors (
   distance_km   REAL,
   PRIMARY KEY (request_id, contractor_id)
 );
+
+-- numer telefonu jako „konto” właściciela projektów (potwierdzony kodem SMS)
+CREATE TABLE IF NOT EXISTS studio_phones (
+  phone       TEXT PRIMARY KEY,           -- +48XXXXXXXXX
+  verified_at TEXT NOT NULL,
+  method      TEXT NOT NULL               -- sms | test (tryb testowy bez bramki SMS)
+);
+CREATE TABLE IF NOT EXISTS studio_owner_phones (
+  owner_key_hash TEXT PRIMARY KEY,
+  phone          TEXT NOT NULL REFERENCES studio_phones(phone) ON DELETE CASCADE,
+  verified_at    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS studio_otp (
+  id             INTEGER PRIMARY KEY,
+  phone          TEXT NOT NULL,
+  owner_key_hash TEXT NOT NULL,
+  code_hash      TEXT NOT NULL,
+  attempts       INTEGER NOT NULL DEFAULT 0,
+  expires_at     TEXT NOT NULL,
+  used_at        TEXT,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_studio_otp_phone ON studio_otp(phone, id);

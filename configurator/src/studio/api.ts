@@ -54,7 +54,9 @@ export const api = {
   quoteRequest: (id: string, form: QuoteForm) =>
     call<{ ok: true; nearby: number; selected: number }>(`/projects/${id}/quote-request`, 'POST', form),
   nearby: (postal: string, radius: number) => call<NearbyDto>(`/contractors/nearby?postal=${encodeURIComponent(postal)}&radius=${radius}`),
-  me: () => call<{ owner: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string } }>('/me'),
+  me: () => call<{ owner: boolean; phone: string | null; smsTest: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string } }>('/me'),
+  phoneStart: (phone: string) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/phone/start', 'POST', { phone }),
+  phoneVerify: (phone: string, code: string) => call<{ ok: true; phone: string; claimed: number }>('/phone/verify', 'POST', { phone, code }),
   comments: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }) =>
     call<CommentDto[]>(ref.owner && ref.projectId ? `/projects/${ref.projectId}/comments` : `/shares/${ref.shareToken}/comments`),
   addComment: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }, text: string, pos: Vec3 | null) =>

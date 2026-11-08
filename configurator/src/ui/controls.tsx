@@ -1,5 +1,5 @@
 // Podstawowe kontrolki panelu. Wartości wewnętrzne w metrach, w UI w centymetrach.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown } from 'lucide-react';
 
@@ -83,12 +83,25 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export function Section({ index, title, open, onToggle, children }: { index: number; title: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+export function Section({ index, title, open, onToggle, children, value, testId }: { index: number; title: string; open: boolean; onToggle: () => void; children: ReactNode; value?: string; testId?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
+  // telefon: otwarta sekcja przewija się tuż pod przyklejoną scenę (scroll-margin = wysokość sceny)
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (!open || !window.matchMedia('(max-width: 767px)').matches) return;
+    // po zwinięciu poprzedniej sekcji (animacja 220 ms) układ się przesuwa — przewijamy po niej i korygujemy
+    const go = (smooth: boolean) => ref.current?.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+    const t1 = setTimeout(() => go(true), 260);
+    const t2 = setTimeout(() => { const r = ref.current?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); if (r && main && Math.abs(r.top - main.bottom) > 4) go(true); }, 760);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [open]);
   return (
-    <div className="border-t border-line">
+    <div ref={ref} className="scroll-mt-[max(46vh,300px)] border-t border-line md:scroll-mt-0" data-testid={testId}>
       <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line text-[10.5px] text-muted">{index}</span>
         <span className="flex-1 text-[13px] font-medium tracking-tight">{title}</span>
+        {value && !open && <span className="max-w-[45%] truncate text-[11.5px] text-muted">{value}</span>}
         <ChevronDown size={16} className={`text-muted transition ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence initial={false}>
@@ -114,5 +127,30 @@ export function Thumb({ active, onClick, children, label, sub, testId }: { activ
       <div className="text-[11px] font-medium leading-tight">{label}</div>
       {sub && <div className="text-[10px] leading-tight text-muted">{sub}</div>}
     </button>
+  );
+}
+
+/**
+ * Wybór graficzny: na telefonie jeden wiersz przewijany w poziomie (bez zawijania na kilka wierszy),
+ * od md siatka. `item` — szerokość kafelka na telefonie.
+ */
+const ITEM_W = { sm: '[&>*]:w-[78px]', md: '[&>*]:w-[94px]', lg: '[&>*]:w-[112px]', xl: '[&>*]:w-[158px]' } as const;
+const GRID = { 2: 'md:grid-cols-2', 3: 'md:grid-cols-3', 4: 'md:grid-cols-4', 5: 'md:grid-cols-5' } as const;
+
+export function Choices({ children, cols = 4, item = 'md', testId }: { children: ReactNode; cols?: keyof typeof GRID; item?: keyof typeof ITEM_W; testId?: string }) {
+  return (
+    <div data-testid={testId} className={`choices -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto px-4 pb-1.5 md:scroll-px-0 md:mx-0 md:grid md:overflow-visible md:px-0 md:pb-0 ${GRID[cols]} ${ITEM_W[item]} [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto`}>
+      {children}
+    </div>
+  );
+}
+
+/** Podtytuł grupy sekcji w panelu. */
+export function GroupLabel({ children, hint }: { children: ReactNode; hint?: string }) {
+  return (
+    <div className="border-t border-line bg-paper/70 px-4 pb-1.5 pt-3">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{children}</div>
+      {hint && <div className="text-[11px] text-muted/90">{hint}</div>}
+    </div>
   );
 }

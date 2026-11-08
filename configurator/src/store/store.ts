@@ -3,9 +3,10 @@ import { DEFAULT_CONFIG, cloneConfig, mergeWithDefaults } from '../engine/defaul
 import { applyCollection } from '../engine/presets';
 import { applyPatch } from '../engine/validate';
 import { autofit, type AutofitResult } from '../engine/autofit';
+import { fitForShape } from '../engine/shapeFit';
 import { solve } from '../engine/solve';
 import { configFromHash } from '../engine/share';
-import type { Config, LightingConfig, Patch, RailingConfig, RoomConfig, Shape, StairConfig, SteelConfig, StructureConfig, TreadConfig, WallKey } from '../engine/types';
+import type { Config, LightingConfig, Patch, RailingConfig, RoomConfig, Shape, StairConfig, SteelConfig, StructureConfig, TreadConfig, TurnType, WallKey } from '../engine/types';
 
 export type CameraMode = 'persp' | 'top' | 'side' | 'section' | 'eye';
 export type WallMode = 'auto' | 'all' | 'transparent' | 'selected' | 'section';
@@ -76,6 +77,8 @@ interface Store {
   requestFit: () => void;
   requestCameraReset: () => void;
   runAutofit: (shape?: Shape) => void;
+  /** Zmiana układu/zakrętu z natychmiastowym dopasowaniem parametrów (bez błędów ze stanu standardowego). */
+  chooseShape: (shape: Shape, turnType?: TurnType) => void;
   clearAutofit: () => void;
   saveLocal: () => boolean;
   restoreLocal: () => boolean;
@@ -161,6 +164,10 @@ export const useStore = create<Store>((set, get) => ({
     const r = autofit(c, target);
     if (r.ok && r.patch) set({ config: applyPatch(c, r.patch), autofit: r });
     else set({ autofit: r });
+  },
+  chooseShape: (shape, turnType) => {
+    const { config, result } = fitForShape(get().config, shape, turnType ?? get().config.stairs.turnType);
+    set({ config, autofit: result }); // przy porażce karta analizy pokaże układy, które się zmieszczą
   },
   clearAutofit: () => set({ autofit: null }),
   saveLocal: () => {

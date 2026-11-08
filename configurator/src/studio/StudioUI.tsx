@@ -1,6 +1,7 @@
 // UI projektu zapisanego na serwerze: Zapisz ▾ (wersje), Udostępnij (link / e-mail / SMS), komentarze 3D, bramka linku.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Copy, HardHat, House, KeyRound, Lock, Mail, MessageCirclePlus, MessageSquare, Save, Send, Share2, X } from 'lucide-react';
 import { useConfig } from '../store/store';
 import { isDirty, useStudio } from './studioStore';
@@ -9,7 +10,8 @@ import { api, type NearbyDto } from './api';
 const fmt = (iso: string) => new Date(iso).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
 
 function Modal({ open, onClose, children, width = 'max-w-md' }: { open: boolean; onClose: () => void; children: ReactNode; width?: string }) {
-  return (
+  // portal do <body>: rodzic z backdrop-filter (nagłówek) zamykałby „fixed” w swoim obszarze
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-50 overflow-y-auto bg-black/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
@@ -21,7 +23,8 @@ function Modal({ open, onClose, children, width = 'max-w-md' }: { open: boolean;
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
@@ -31,7 +34,6 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
   const st = useStudio();
   const config = useConfig();
   const [menu, setMenu] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const dirty = isDirty(st, config);
   useEffect(() => {
@@ -42,11 +44,13 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
   useEffect(() => { if (st.error) { toast(st.error); st.clearError(); } }, [st.error]); // eslint-disable-line react-hooks/exhaustive-deps
   if (st.role === 'none') return null;
   const owner = st.role === 'owner';
+  const contractor = st.role === 'contractor';
 
   const save = async () => {
+    setMenu(false);
     let name: string | undefined;
     if (!owner) {
-      const n = prompt(st.role === 'contractor' ? 'Zapisz własną kopię projektu — nazwa:' : 'Nazwa projektu (np. „Schody — dom Kowalskich”):', st.role === 'contractor' ? `${st.name} (kopia)` : st.name);
+      const n = prompt(contractor ? 'Zapisz własną kopię projektu — nazwa:' : 'Nazwa projektu (np. „Schody — dom Kowalskich”):', contractor ? `${st.name} (kopia)` : st.name);
       if (n === null) return;
       name = n.trim() || st.name;
     }
@@ -63,23 +67,25 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
   return (
     <div className="flex items-center gap-1.5">
       {owner && st.versions.length > 0 && <span className="hidden text-[11.5px] text-muted lg:inline">{st.name} · wersja {st.version}{dirty ? ' · niezapisane zmiany' : ''}</span>}
-      {st.role === 'contractor' && <span className="hidden items-center gap-1 rounded-full bg-[#e8f0fd] px-2.5 py-1 text-[11.5px] text-[#2f6fd6] md:flex"><HardHat size={13} />{st.viewerName} · firma wykonawcza</span>}
-      {(owner || st.role === 'local') && (
-        <button type="button" data-testid="share-project" onClick={() => setShareOpen(true)} className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12.5px] hover:border-oak">
-          <Share2 size={14} /> <span className="hidden sm:inline">Udostępnij ten projekt</span>
-        </button>
-      )}
+      {contractor && <span className="hidden items-center gap-1 rounded-full bg-[#e8f0fd] px-2.5 py-1 text-[11.5px] text-[#2f6fd6] md:flex"><HardHat size={13} />{st.viewerName} · firma wykonawcza</span>}
       <div className="relative flex" ref={ref}>
-        <button type="button" data-testid="save" disabled={st.busy} onClick={save} className="flex items-center gap-2 rounded-l-full bg-ink py-1.5 pl-3 pr-2.5 sm:pl-4 sm:pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
-          <Save size={14} /> <span className={st.busy ? '' : 'hidden min-[400px]:inline'}>{st.busy ? 'Zapisywanie…' : st.role === 'contractor' ? 'Zapisz kopię' : 'Zapisz'}</span>
-          {dirty && owner && <span className="h-1.5 w-1.5 rounded-full bg-[#f3a845]" title="Niezapisane zmiany" />}
-        </button>
+        {contractor ? (
+          <button type="button" data-testid="save" disabled={st.busy} onClick={save} className="flex items-center gap-2 rounded-l-full bg-ink py-1.5 pl-3.5 pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
+            <Save size={14} /> {st.busy ? 'Zapisywanie…' : 'Zapisz kopię'}
+          </button>
+        ) : (
+          <button type="button" data-testid="save-share" disabled={st.busy} onClick={() => st.setShareOpen(true)} className="flex items-center gap-2 whitespace-nowrap rounded-l-full bg-ink py-1.5 pl-3.5 pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
+            <Share2 size={14} /> {st.busy ? 'Zapisywanie…' : 'Zapisz i udostępnij'}
+            {dirty && owner && <span className="h-1.5 w-1.5 rounded-full bg-[#f3a845]" title="Niezapisane zmiany" />}
+          </button>
+        )}
         <button type="button" data-testid="save-menu" aria-label="Więcej opcji zapisu" onClick={() => { setMenu(!menu); void st.refreshProjects(); }} className="rounded-r-full border-l border-white/20 bg-ink px-2 text-white hover:bg-ink/85">
           <ChevronDown size={15} />
         </button>
         <AnimatePresence>
           {menu && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute right-0 top-full z-40 mt-1 w-72 rounded-xl border border-line bg-white p-1.5 shadow-xl">
+              {!contractor && <Item testId="save" onClick={save}><Save size={14} /> {owner ? 'Zapisz zmiany (bez udostępniania)' : 'Zapisz projekt (bez udostępniania)'}</Item>}
               <Item testId="save-version" onClick={saveVersion}><Save size={14} /> Zapisz jako nową wersję…</Item>
               {owner && st.versions.length > 0 && <Hdr>Wersje projektu</Hdr>}
               {owner && st.versions.map((v) => (
@@ -87,12 +93,12 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
                   <div><div className="font-medium">{v.label}</div><div className="text-[10.5px] text-muted">zapisano {fmt(v.updated_at)}</div></div>
                 </Item>
               ))}
-              {owner && (
+              {owner && !st.phone && (
                 <Item onClick={async () => { setMenu(false); const url = await st.ownerLink(); if (url) { await copy(url); toast('Skopiowano link właściciela (7 dni) — otwórz go na innym urządzeniu'); } }}>
                   <KeyRound size={14} /> Link właściciela (inne urządzenie)
                 </Item>
               )}
-              {st.myProjects.length > 0 && <Hdr>Moje projekty</Hdr>}
+              {st.myProjects.length > 0 && <Hdr>Moje projekty{st.phone ? ` · ${fmtPhone(st.phone)}` : ''}</Hdr>}
               {st.myProjects.slice(0, 8).map((p) => (
                 <Item key={p.id} active={p.id === st.projectId} onClick={() => { setMenu(false); void st.openProject(p.id).then(() => toast(`Otwarto: ${p.name}`)); }}>
                   <div><div className="font-medium">{p.name}</div><div className="text-[10.5px] text-muted">wersja {p.current_version} · {fmt(p.updated_at)}</div></div>
@@ -103,10 +109,12 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
           )}
         </AnimatePresence>
       </div>
-      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} toast={toast} />
+      {!contractor && <SaveShareDialog open={st.shareOpen} onClose={() => st.setShareOpen(false)} toast={toast} />}
     </div>
   );
 }
+
+export const fmtPhone = (p: string) => p.replace(/^\+48(\d{3})(\d{3})(\d{3})$/, '+48 $1 $2 $3');
 
 const Item = ({ onClick, children, active, testId }: { onClick: () => void; children: ReactNode; active?: boolean; testId?: string }) => (
   <button type="button" data-testid={testId} onClick={onClick} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12.5px] hover:bg-paper">
@@ -124,54 +132,130 @@ async function copy(text: string): Promise<boolean> {
   }
 }
 
-export function ShareDialog({ open, onClose, toast }: { open: boolean; onClose: () => void; toast: (m: string) => void }) {
+/** Krok w oknie „Zapisz i udostępnij” — numerowany, widoczny od razu, nieaktywny do czasu poprzedniego kroku. */
+function Step({ n, title, done, active, children, testId }: { n: number; title: string; done: boolean; active: boolean; children: ReactNode; testId?: string }) {
+  return (
+    <li className={`relative pl-10 ${active || done ? '' : 'opacity-55'}`} data-testid={testId}>
+      <span className={`absolute left-0 top-0 grid h-7 w-7 place-items-center rounded-full text-[12.5px] font-bold ${done ? 'bg-ok text-white' : active ? 'bg-ink text-white' : 'border border-line bg-paper text-muted'}`}>{done ? <Check size={15} /> : n}</span>
+      <div className="text-[14px] font-semibold leading-7">{title}</div>
+      <div className="mt-1">{children}</div>
+    </li>
+  );
+}
+
+export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClose: () => void; toast: (m: string) => void }) {
   const st = useStudio();
+  const [phoneInput, setPhoneInput] = useState('');
+  const [sent, setSent] = useState<null | { phone: string; testCode?: string }>(null);
+  const [code, setCode] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
+  const verified = !!st.phone;
   useEffect(() => {
     if (!open) return;
-    setCopied(false);
-    setUrl(null);
-    void st.ensureShare().then((u) => { if (u) setUrl(u); else onClose(); });
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    setErr(null); setCopied(false); setUrl(null);
+    // numer już potwierdzony → od razu zapis i link
+    if (st.phone) void st.ensureShare().then((u) => { if (u) setUrl(u); });
+  }, [open, st.phone]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const send = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setBusy(true); setErr(null);
+    const r = await st.startPhone(phoneInput);
+    setBusy(false);
+    if ('error' in r) setErr(r.error); else { setSent(r); setCode(''); }
+  };
+  const verify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sent) return;
+    setBusy(true); setErr(null);
+    const r = await st.verifyPhone(sent.phone, code);
+    setBusy(false);
+    if (r) setErr(r); else toast('Numer potwierdzony — projekt przypisany');
+  };
   const text = `Projekt schodów „${st.name}” w Stair Studio — zobacz i wyceń: `;
+  const input = 'w-full rounded-lg border border-line px-3 py-2 text-[14px] outline-none focus:border-oak';
+
   return (
-    <Modal open={open} onClose={onClose}>
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-[15px] font-semibold">Udostępnij ten projekt</div>
-          <div className="text-[12px] text-muted">Link zawsze pokazuje bieżącą wersję. Firma wykonawcza zobaczy projekt po krótkiej rejestracji.</div>
+    <>
+      <Modal open={open && !findOpen} onClose={onClose}>
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-[15px] font-semibold">Zapisz i udostępnij projekt</div>
+            <div className="text-[12px] text-muted">Trzy kroki — wszystko bezpłatnie.</div>
+          </div>
+          <button type="button" onClick={onClose} className="text-muted hover:text-ink" aria-label="Zamknij"><X size={18} /></button>
         </div>
-        <button type="button" onClick={onClose} className="text-muted hover:text-ink"><X size={18} /></button>
-      </div>
-      <div className="mt-4 flex gap-2">
-        <input data-testid="share-url" readOnly value={url ?? 'Zapisywanie projektu…'} className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-[12.5px]" onFocus={(e) => e.target.select()} />
-        <button type="button" disabled={!url} onClick={async () => { if (url && (await copy(url))) { setCopied(true); toast('Skopiowano link'); } }} className="flex items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] text-white disabled:opacity-50">
-          {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Skopiowano' : 'Kopiuj'}
-        </button>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <a data-testid="share-email" aria-disabled={!url} href={url ? `mailto:?subject=${encodeURIComponent(`Projekt schodów: ${st.name}`)}&body=${encodeURIComponent(`Dzień dobry,\n\n${text}\n${url}?via=email\n\nPozdrawiam`)}` : undefined} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-[13px] hover:border-oak">
-          <Mail size={15} /> Wyślij e-mailem
-        </a>
-        <a data-testid="share-sms" aria-disabled={!url} href={url ? `sms:?&body=${encodeURIComponent(`${text}${url}?via=sms`)}` : undefined} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-[13px] hover:border-oak">
-          <MessageSquare size={15} /> Wyślij SMS-em
-        </a>
-      </div>
-      {st.contractors.length > 0 && (
-        <div className="mt-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Firmy, które otworzyły projekt</div>
-          <ul className="mt-1.5 space-y-1.5">
-            {st.contractors.map((c) => (
-              <li key={c.email} className="rounded-lg bg-paper px-3 py-2 text-[12px]">
-                <div className="font-medium">{c.first_name} {c.last_name}</div>
-                <div className="text-muted"><a className="underline" href={`mailto:${c.email}`}>{c.email}</a> · <a className="underline" href={`tel:${c.phone}`}>{c.phone}</a> · ostatnio {fmt(c.last_at)}</div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </Modal>
+        <ol className="mt-4 space-y-5" data-testid="save-share-dialog">
+          <Step n={1} title="Przypisz projekt do numeru telefonu" done={verified} active={!verified} testId="step-phone">
+            {verified ? (
+              <p className="text-[12.5px] text-ink/80" data-testid="phone-done">Projekt przypisany do numeru <b>{fmtPhone(st.phone!)}</b>. Na innym urządzeniu wystarczy ten sam numer.</p>
+            ) : !sent ? (
+              <form className="flex gap-2" onSubmit={send}>
+                <div className="flex min-w-0 flex-1 items-center rounded-lg border border-line focus-within:border-oak">
+                  <span className="pl-3 text-[14px] text-muted">+48</span>
+                  <input data-testid="phone-input" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="600 100 200" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} className="min-w-0 flex-1 bg-transparent px-2 py-2 text-[14px] outline-none" />
+                </div>
+                <button type="submit" data-testid="phone-send" disabled={busy || phoneInput.replace(/\D/g, '').length < 9} className="shrink-0 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? 'Wysyłanie…' : 'Wyślij kod SMS'}</button>
+              </form>
+            ) : (
+              <form className="grid gap-2" onSubmit={verify}>
+                <p className="text-[12px] text-muted">Wysłaliśmy 6-cyfrowy kod na <b className="text-ink">{fmtPhone(sent.phone)}</b>.</p>
+                {sent.testCode && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12px] text-warn" data-testid="phone-test-code">Tryb testowy (bramka SMS nie jest jeszcze skonfigurowana) — Twój kod: <b className="tracking-[0.2em]">{sent.testCode}</b></p>}
+                <div className="flex gap-2">
+                  <input data-testid="phone-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className={`${input} text-center tracking-[0.4em]`} />
+                  <button type="submit" data-testid="phone-verify" disabled={busy || code.length !== 6} className="shrink-0 rounded-lg bg-ink px-4 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? '…' : 'Potwierdź'}</button>
+                </div>
+                <button type="button" onClick={() => { setSent(null); setErr(null); }} className="justify-self-start text-[11.5px] text-muted underline">Zmień numer lub wyślij kod ponownie</button>
+              </form>
+            )}
+            {err && <div className="mt-2 rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad" data-testid="phone-error">{err}</div>}
+          </Step>
+
+          <Step n={2} title="Link do projektu" done={!!url} active={verified && !url} testId="step-link">
+            {url ? (
+              <>
+                <div className="flex gap-2">
+                  <input data-testid="share-url" readOnly value={url} className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-[12.5px]" onFocus={(e) => e.target.select()} />
+                  <button type="button" onClick={async () => { if (await copy(url)) { setCopied(true); toast('Skopiowano link'); } }} className="flex items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] text-white">
+                    {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Skopiowano' : 'Kopiuj'}
+                  </button>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <a data-testid="share-email" href={`mailto:?subject=${encodeURIComponent(`Projekt schodów: ${st.name}`)}&body=${encodeURIComponent(`Dzień dobry,\n\n${text}\n${url}?via=email\n\nPozdrawiam`)}`} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2 text-[12.5px] hover:border-oak"><Mail size={14} /> E-mailem</a>
+                  <a data-testid="share-sms" href={`sms:?&body=${encodeURIComponent(`${text}${url}?via=sms`)}`} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2 text-[12.5px] hover:border-oak"><MessageSquare size={14} /> SMS-em</a>
+                </div>
+                <p className="mt-1.5 text-[11px] text-muted">Link zawsze pokazuje bieżącą wersję. Firma zobaczy projekt po krótkiej rejestracji.</p>
+                {st.contractors.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Firmy, które otworzyły projekt</div>
+                    <ul className="mt-1.5 space-y-1.5">
+                      {st.contractors.map((c) => (
+                        <li key={c.email} className="rounded-lg bg-paper px-3 py-2 text-[12px]">
+                          <div className="font-medium">{c.first_name} {c.last_name}</div>
+                          <div className="text-muted"><a className="underline" href={`mailto:${c.email}`}>{c.email}</a> · <a className="underline" href={`tel:${c.phone}`}>{c.phone}</a> · ostatnio {fmt(c.last_at)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-[12px] text-muted">{verified ? 'Zapisywanie projektu i tworzenie linku…' : 'Link pojawi się po potwierdzeniu numeru.'}</p>
+            )}
+          </Step>
+
+          <Step n={3} title="Znajdź wykonawców w okolicy" done={false} active={!!url} testId="step-find">
+            <p className="text-[12px] text-muted">Wpisz kod pocztowy — pokażemy firmy schodowe w promieniu 50 km i poprosisz wybrane o wycenę.</p>
+            <button type="button" data-testid="open-find" disabled={!url} onClick={() => setFindOpen(true)} className="mt-2 rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-white disabled:opacity-40">Znajdź wykonawców</button>
+          </Step>
+        </ol>
+      </Modal>
+      <FindContractorDialog open={findOpen} onClose={() => { setFindOpen(false); onClose(); }} />
+    </>
   );
 }
 
@@ -366,19 +450,16 @@ export function ShareGate() {
 
 export function FindContractorCard() {
   const role = useStudio((s) => s.role);
-  const [open, setOpen] = useState(false);
+  const setShareOpen = useStudio((s) => s.setShareOpen);
   if (role !== 'local' && role !== 'owner') return null;
   return (
-    <>
-      <div className="mx-3 mb-3 flex items-center gap-3 rounded-2xl border border-oak/40 bg-oak-soft/40 px-4 py-3" data-testid="find-contractor-card">
-        <div className="min-w-0 flex-1">
-          <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-oak">Krok 2 · bezpłatnie</div>
-          <div className="text-[13px] font-medium leading-tight">Porównaj wyceny wykonawców z okolicy</div>
-        </div>
-        <button type="button" data-testid="find-contractor" onClick={() => setOpen(true)} className="shrink-0 rounded-full bg-ink px-3.5 py-2 text-[12px] font-medium text-white hover:bg-ink/85">Znajdź wykonawców</button>
+    <div className="mx-3 mb-3 flex items-center gap-3 rounded-2xl border border-oak/40 bg-oak-soft/40 px-4 py-3" data-testid="find-contractor-card">
+      <div className="min-w-0 flex-1">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-oak">Bezpłatnie</div>
+        <div className="text-[13px] font-medium leading-tight">Porównaj wyceny wykonawców z okolicy</div>
       </div>
-      <FindContractorDialog open={open} onClose={() => setOpen(false)} />
-    </>
+      <button type="button" data-testid="find-contractor" onClick={() => setShareOpen(true)} className="shrink-0 rounded-full bg-ink px-3.5 py-2 text-[12px] font-medium text-white hover:bg-ink/85">Znajdź wykonawców</button>
+    </div>
   );
 }
 
@@ -392,7 +473,9 @@ export function FindContractorDialog({ open, onClose }: { open: boolean; onClose
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
+  const myPhone = useStudio((s) => s.phone);
   const [contact, setContact] = useState({ name: '', email: '', phone: '', consent: false });
+  useEffect(() => { if (myPhone && !contact.phone) setContact((c) => ({ ...c, phone: fmtPhone(myPhone) })); }, [myPhone]); // eslint-disable-line react-hooks/exhaustive-deps
   const [consentText, setConsentText] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);

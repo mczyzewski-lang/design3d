@@ -25,13 +25,23 @@ const info = await page.textContent('[data-testid="info-bar"]');
 console.log('status:', status, '| info:', info.replace(/\s+/g, ' '));
 await shot('01-perspektywa');
 
+// zmiana układu ze stanu standardowego: parametry dopasowane od razu — bez błędów
+if (!(await page.locator('[data-testid="shape-I"]').isVisible())) await page.click('[data-testid="sec-shape"] > button');
+for (const sh of ['I', 'L', 'S', 'U']) {
+  await page.click(`[data-testid="shape-${sh}"]`);
+  await wait(900);
+  const st = await page.textContent('[data-testid="status-pill"]');
+  console.log(`${st.includes('Nie mieści') ? '✗' : '✓'} ze standardu → ${sh}: ${st}`);
+  await shot(`07-standard-${sh}`);
+}
+
 for (const [cam, name] of [['top', '02-z-gory'], ['side', '03-z-boku'], ['section', '04-przekroj'], ['eye', '05-poziom-oczu'], ['persp', '06-perspektywa-powrot']]) {
   await page.click(`[data-testid="cam-${cam}"]`);
   await wait(1400);
   await shot(name);
 }
 
-await page.click('text=Konstrukcja');
+await page.click('[data-testid="sec-structure"] > button');
 for (const s of ['centralBeam', 'sideStringers', 'zigzag', 'bentPlate', 'weldedFrame', 'woodStringers', 'concrete']) {
   await page.click(`[data-testid="structure-${s}"]`);
   await wait(700);
@@ -43,7 +53,7 @@ await shot('11-spocznik-4-slupy');
 await page.click('[data-testid="structure-centralBeam"]');
 await page.click('[data-testid="support-none"]');
 
-await page.click('text=Balustrady');
+await page.click('[data-testid="sec-railing"] > button');
 for (const r of ['verticalBars', 'flatBars', 'horizontalBars', 'perforated', 'mesh', 'solid', 'glass']) {
   await page.click(`[data-testid="railing-${r}"]`);
   await wait(700);
@@ -52,7 +62,7 @@ for (const r of ['verticalBars', 'flatBars', 'horizontalBars', 'perforated', 'me
 await page.click('[data-testid="railing-verticalBars"]');
 
 // konflikt: zmniejsz głębokość -> czerwone bryły, „Nie mieści się”
-await page.click('text=Wymiary przestrzeni');
+await page.click('[data-testid="sec-room"] > button');
 await page.fill('[data-testid="f-depth"]', '300');
 await page.press('[data-testid="f-depth"]', 'Enter');
 await wait(1200);
@@ -68,13 +78,22 @@ await page.click('[data-testid="tool-night"]');
 await wait(1000);
 await shot('40-noc-led');
 await page.click('[data-testid="tool-night"]');
-await page.click('[data-testid="menu-collections"]');
-await page.click('text=Dark Luxury');
+await page.click('[data-testid="sec-wood"] > button');
+await page.click('[data-testid="wood-oakSmoked"]');
+await page.click('[data-testid="sec-steel"] > button');
+await page.click('[data-testid="steel-bronze"]');
 await wait(1000);
-await shot('41-kolekcja-dark-luxury');
+await shot('41-dab-wedzony-braz');
 
 // nowe kształty i opcje
-await page.click('text=Typ schodów');
+await page.click('[data-testid="sec-shape"] > button');
+// zmiana układu ze stanu standardowego: od razu dopasowane parametry, bez błędów
+await page.click('[data-testid="cam-persp"]');
+for (const sh of ['I', 'L', 'U']) {
+  await page.click(`[data-testid="shape-${sh}"]`);
+  await wait(900);
+  console.log(`układ ${sh}:`, await page.textContent('[data-testid="status-pill"]'));
+}
 await page.click('[data-testid="shape-S"]');
 await wait(1200);
 console.log('spirala:', await page.textContent('[data-testid="status-pill"]'));
@@ -95,7 +114,7 @@ await page.click('[data-testid="shape-U"]');
 await wait(1200);
 await shot('64-U-zabiegowe');
 await page.click('text="Spocznik"');
-await page.click('text=Balustrady');
+await page.click('[data-testid="sec-railing"] > button');
 await page.click('[data-testid="railing-glass"]');
 for (const m of ['point', 'channel', 'clamps']) {
   await page.click(`[data-testid="glass-mount-${m}"]`);

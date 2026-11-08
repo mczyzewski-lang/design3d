@@ -312,3 +312,35 @@ describe('LED w zestawieniu', () => {
     expect(mergeWithDefaults(old).lighting.ledMode).toBe('nosing');
   });
 });
+
+describe('zmiana układu ze stanu standardowego — bez błędów', async () => {
+  const { fitForShape, isStarterRoom } = await import('./shapeFit');
+  const level = (c: Config) => solve(c).messages.filter((m) => m.level !== 'info');
+  test.each([['L', 'landing'], ['L', 'winders'], ['U', 'landing'], ['U', 'winders'], ['S', 'landing']] as const)('%s / %s: bez błędów i ostrzeżeń', (sh, tt) => {
+    const { config, result } = fitForShape(cloneConfig(DEFAULT_CONFIG), sh, tt);
+    expect(result.ok).toBe(true);
+    expect(level(config).map((m) => m.id)).toEqual([]);
+    expect(solve(config).status).toBe('ok');
+  });
+  test('proste: bez błędów; przy 350 cm zostaje tylko ostrzeżenie o liczbie stopni w biegu (norma)', () => {
+    const { config } = fitForShape(cloneConfig(DEFAULT_CONFIG), 'I');
+    expect(solve(config).messages.some((m) => m.level === 'error')).toBe(false);
+    expect(level(config).map((m) => m.id)).toEqual(['flight-0']);
+    expect(config.railing.inner).toBe('balustrade');
+  });
+  test('łańcuch zmian (I → L → S → U) zawsze bez błędów, U wraca do pokoju startowego', () => {
+    let c = cloneConfig(DEFAULT_CONFIG);
+    for (const sh of ['I', 'L', 'S', 'U'] as const) {
+      c = fitForShape(c, sh).config;
+      expect(solve(c).messages.some((m) => m.level === 'error')).toBe(false);
+    }
+    expect([c.room.width, c.room.depth]).toEqual([DEFAULT_CONFIG.room.width, DEFAULT_CONFIG.room.depth]);
+  });
+  test('pokój zmieniony przez użytkownika nie jest podmieniany', () => {
+    const c = cloneConfig(DEFAULT_CONFIG);
+    c.room.width = 2.9; c.room.depth = 4.2;
+    expect(isStarterRoom(c)).toBe(false);
+    const { config } = fitForShape(c, 'L');
+    expect([config.room.width, config.room.depth]).toEqual([2.9, 4.2]);
+  });
+});

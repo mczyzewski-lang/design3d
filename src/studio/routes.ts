@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { all, exec, get, run, tx, nowIso, type Row } from '../db/index.ts';
 import { distanceKm, geocodePostal } from './geo/postal.ts';
+import { sendSms, smsConfigured } from './sms.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let schemaReady = false;
@@ -22,7 +23,7 @@ export function ensureStudioSchema(): void {
       ['source', 'TEXT'], ['via', 'TEXT'], ['ref_project_id', 'TEXT'],
       ['company_name', 'TEXT'], ['listed', 'INTEGER NOT NULL DEFAULT 0'],
     ],
-    studio_projects: [['source', 'TEXT']],
+    studio_projects: [['source', 'TEXT'], ['owner_phone', 'TEXT']],
   };
   for (const [table, list] of Object.entries(migrate)) {
     const cols = new Set(all(`PRAGMA table_info(${table})`).map((c) => c.name as string));
@@ -81,6 +82,19 @@ function ownerKey(req: Request, res: Response, create: boolean): string | null {
   }
   return k ?? null;
 }
+/** „+48 600 100 200”, „600100200”, „0048…” → „+48600100200”; niepoprawny → null. */
+export function normPhone(v: unknown): string | null {
+  let d = String(v ?? '').replace(/[^\d+]/g, '');
+  if (d.startsWith('00')) d = `+${d.slice(2)}`;
+  if (/^\d{9}$/.test(d)) d = `+48${d}`;
+  if (/^48\d{9}$/.test(d)) d = `+${d}`;
+  return /^\+48\d{9}$/.test(d) ? d : null;
+}
+function phoneOf(req: Request): string | null {
+  const k = cookies(req)[OWNER_COOKIE];
+  return k ? ((get(`SELECT phone FROM studio_owner_phones WHERE owner_key_hash = ?`, sha(k))?.phone as string) ?? null) : null;
+}
+
 function isOwner(req: Request, projectId: string): boolean {
   const k = cookies(req)[OWNER_COOKIE];
   return !!k && !!get(`SELECT 1 FROM studio_project_owners WHERE project_id = ? AND owner_key_hash = ?`, projectId, sha(k));
@@ -146,8 +160,9 @@ const wrap = (fn: (req: Request, res: Response) => unknown) => (req: Request, re
 const hits = new Map<string, number[]>();
 /** Tylko testy: wyczyść liczniki limitów (wszystkie żądania testowe mają ten sam adres IP). */
 export function resetRateLimits(): void { hits.clear(); }
-function rateLimited(req: Request, max = 10, windowMs = 10 * 60_000): boolean {
-  const ip = req.ip ?? 'x';
+/** Limit prób per IP i per kategoria (osobne liczniki — zdarzenia nie zjadają puli rejestracji). */
+function rateLimited(req: Request, max = 10, windowMs = 10 * 60_000, bucket = 'register'): boolean {
+  const ip = `${bucket}:${req.ip ?? 'x'}`;
   const now = Date.now();
   const list = (hits.get(ip) ?? []).filter((t) => now - t < windowMs);
   list.push(now);
@@ -183,7 +198,8 @@ export function studioRouter(): express.Router {
   r.get('/me', (req, res) => {
     const c = contractorOf(req);
     res.json({
-      owner: !!cookies(req)[OWNER_COOKIE], contractor: c ? { name: `${c.first_name} ${c.last_name}`, email: c.email } : null,
+      owner: !!cookies(req)[OWNER_COOKIE], phone: phoneOf(req), smsTest: !smsConfigured(),
+      contractor: c ? { name: `${c.first_name} ${c.last_name}`, email: c.email } : null,
       texts: { consent: CONSENT_TEXT, leads: LEADS_TEXT, quote: QUOTE_CONSENT_TEXT },
     });
   });
@@ -195,7 +211,7 @@ export function studioRouter(): express.Router {
     const key = ownerKey(req, res, true)!;
     const id = token(9);
     tx(() => {
-      run(`INSERT INTO studio_projects (id, name, source) VALUES (?, ?, ?)`, id, name, cleanTag(req.body?.source));
+      run(`INSERT INTO studio_projects (id, name, source, owner_phone) VALUES (?, ?, ?, ?)`, id, name, cleanTag(req.body?.source), phoneOf(req));
       run(`INSERT INTO studio_project_owners (project_id, owner_key_hash) VALUES (?, ?)`, id, sha(key));
       run(`INSERT INTO studio_versions (project_id, version, label, config) VALUES (?, 1, ?, ?)`, id, cleanName(req.body?.label, 80) || 'Wersja 1', cfg);
     });
@@ -267,6 +283,48 @@ export function studioRouter(): express.Router {
       run(`UPDATE studio_projects SET current_version = ?, updated_at = ? WHERE id = ?`, next, nowIso(), id);
     });
     res.status(201).json(projectView(id));
+  }));
+
+  // ---------- numer telefonu (kod SMS) ----------
+  /** Krok 1 „Zapisz i udostępnij”: wyślij kod SMS na numer. */
+  r.post('/phone/start', wrap(async (req, res) => {
+    const phone = normPhone(req.body?.phone);
+    if (!phone) return res.status(400).json({ error: 'Podaj polski numer telefonu (9 cyfr)' });
+    if (rateLimited(req, 6, 10 * 60_000, 'phone')) return res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' });
+    const recent = get(`SELECT COUNT(*) n FROM studio_otp WHERE phone = ? AND created_at > ?`, phone, new Date(Date.now() - 10 * 60_000).toISOString())!.n as number;
+    if (recent >= 3) return res.status(429).json({ error: 'Wysłaliśmy już kilka kodów na ten numer — spróbuj za 10 minut' });
+    const key = ownerKey(req, res, true)!;
+    const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+    run(`INSERT INTO studio_otp (phone, owner_key_hash, code_hash, expires_at) VALUES (?, ?, ?, ?)`, phone, sha(key), sha(`${phone}:${code}`), new Date(Date.now() + 10 * 60_000).toISOString());
+    const sms = await sendSms(phone, `Kod Stair Studio: ${code}. Wpisz go, aby przypisać projekt schodów do numeru. design3d.pl`);
+    if (!sms.sent && !sms.demo) return res.status(502).json({ error: 'Nie udało się wysłać SMS — spróbuj ponownie za chwilę' });
+    // tryb testowy (brak bramki SMS): kod wraca w odpowiedzi, żeby dało się przejść dalej
+    res.json({ ok: true, phone, test: sms.demo, ...(sms.demo ? { testCode: code } : {}) });
+  }));
+
+  /** Potwierdzenie kodu: numer staje się „kontem” — przypina przeglądarkę i projekty (także z innych urządzeń). */
+  r.post('/phone/verify', wrap((req, res) => {
+    const phone = normPhone(req.body?.phone);
+    const code = String(req.body?.code ?? '').replace(/\D/g, '');
+    const key = cookies(req)[OWNER_COOKIE];
+    if (!phone || !key || code.length !== 6) return res.status(400).json({ error: 'Wpisz 6-cyfrowy kod z SMS' });
+    const otp = get(`SELECT * FROM studio_otp WHERE phone = ? AND owner_key_hash = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1`, phone, sha(key));
+    if (!otp || otp.expires_at < nowIso()) return res.status(400).json({ error: 'Kod wygasł — wyślij nowy' });
+    if (otp.attempts >= 5) return res.status(429).json({ error: 'Zbyt wiele błędnych prób — wyślij nowy kod' });
+    if (otp.code_hash !== sha(`${phone}:${code}`)) {
+      run(`UPDATE studio_otp SET attempts = attempts + 1 WHERE id = ?`, otp.id);
+      return res.status(400).json({ error: 'Nieprawidłowy kod' });
+    }
+    const k = sha(key);
+    const claimed = tx(() => {
+      run(`UPDATE studio_otp SET used_at = ? WHERE id = ?`, nowIso(), otp.id);
+      run(`INSERT INTO studio_phones (phone, verified_at, method) VALUES (?, ?, ?) ON CONFLICT(phone) DO UPDATE SET verified_at = excluded.verified_at`, phone, nowIso(), smsConfigured() ? 'sms' : 'test');
+      run(`INSERT INTO studio_owner_phones (owner_key_hash, phone, verified_at) VALUES (?, ?, ?) ON CONFLICT(owner_key_hash) DO UPDATE SET phone = excluded.phone, verified_at = excluded.verified_at`, k, phone, nowIso());
+      // projekty tej przeglądarki bez numeru → przypisz numer; projekty numeru z innych urządzeń → dostęp tutaj
+      run(`UPDATE studio_projects SET owner_phone = ? WHERE owner_phone IS NULL AND id IN (SELECT project_id FROM studio_project_owners WHERE owner_key_hash = ?)`, phone, k);
+      return run(`INSERT OR IGNORE INTO studio_project_owners (project_id, owner_key_hash) SELECT id, ? FROM studio_projects WHERE owner_phone = ?`, k, phone).changes;
+    });
+    res.json({ ok: true, phone, claimed });
   }));
 
   /** Podgląd projektu (zrzut sceny JPEG/PNG/WebP) — pokazywany w bramce udostępnionego linku. */
@@ -451,7 +509,7 @@ export function studioRouter(): express.Router {
   const PAGES = new Set(['landing', 'configurator']);
   r.post('/events', (req, res) => {
     const b = req.body ?? {};
-    if (!EVENT_TYPES.has(b.type) || rateLimited(req, 120, 10 * 60_000)) return res.status(204).end();
+    if (!EVENT_TYPES.has(b.type) || rateLimited(req, 120, 10 * 60_000, 'events')) return res.status(204).end();
     run(`INSERT INTO studio_events (type, page, source, detail) VALUES (?, ?, ?, ?)`,
       b.type, PAGES.has(b.page) ? b.page : null, cleanTag(b.source), cleanTag(b.detail, 40));
     res.status(204).end();
@@ -462,7 +520,7 @@ export function studioRouter(): express.Router {
    * na pokazywanie w wyszukiwarce. Bez danych kontaktowych: zapytanie idzie przez design3d.pl.
    */
   r.get('/contractors/nearby', (req, res) => {
-    if (rateLimited(req, 60, 10 * 60_000)) return res.status(429).json({ error: 'Zbyt wiele wyszukiwań — spróbuj za kilka minut' });
+    if (rateLimited(req, 60, 10 * 60_000, 'nearby')) return res.status(429).json({ error: 'Zbyt wiele wyszukiwań — spróbuj za kilka minut' });
     const origin = geocodePostal(req.query.postal);
     if (!origin) return res.status(400).json({ error: 'Podaj poprawny kod pocztowy (00-000)' });
     const radius = Math.min(150, Math.max(10, Math.round(Number(req.query.radius) || SEARCH_RADIUS_KM)));

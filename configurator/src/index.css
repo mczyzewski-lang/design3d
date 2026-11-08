@@ -53,6 +53,9 @@ input[type='range'] { accent-color: var(--color-oak); }
 }
 
 .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d8d2c8 transparent; }
+/* przewijane w poziomie wybory graficzne (telefon) — bez paska przewijania */
+.choices { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.choices::-webkit-scrollbar { display: none; }
 
 .pin-label {
   font: 700 11px/1 var(--font-sans);

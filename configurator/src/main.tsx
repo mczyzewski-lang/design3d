@@ -4,7 +4,6 @@ import './index.css';
 import App from './App';
 import { firstTouchSource, trackVisit } from './analytics';
 import { useStore } from './store/store';
-import { shapePatch } from './engine/presets';
 
 // źródło pierwszego wejścia ustalamy, zanim wyczyścimy parametry adresu
 firstTouchSource();
@@ -12,9 +11,8 @@ firstTouchSource();
 const q = new URLSearchParams(location.search);
 const shape = q.get('shape');
 if (shape === 'I' || shape === 'L' || shape === 'U' || shape === 'S') {
-  const st = useStore.getState();
-  st.setStairs(shapePatch(st.config.stairs, shape));
-  if (q.get('turn') === 'winders' && shape !== 'S' && shape !== 'I') st.setStairs({ turnType: 'winders', winders: shape === 'L' ? 3 : 6 });
+  // od razu dopasowane parametry — bez błędów w stanie startowym
+  useStore.getState().chooseShape(shape, q.get('turn') === 'winders' && shape !== 'S' && shape !== 'I' ? 'winders' : 'landing');
   q.delete('shape'); q.delete('from'); q.delete('turn');
   history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '') + location.hash);
 }

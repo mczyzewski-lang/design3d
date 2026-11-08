@@ -269,3 +269,50 @@ test('wyszukiwarka wykonawców: promień 50 km, najbliżsi pierwsi, bez danych k
   const saved = get(`SELECT COUNT(*) n FROM studio_quote_request_contractors WHERE request_id = ?`, q.body.id)!.n;
   assert.equal(saved, 1);
 });
+
+test('numer telefonu: kod SMS (tryb testowy), błędny kod, projekty dostępne na drugim urządzeniu', async () => {
+  (await import('../src/studio/routes.ts')).resetRateLimits();
+  const { normPhone } = await import('../src/studio/routes.ts');
+  assert.equal(normPhone('600 100 200'), '+48600100200');
+  assert.equal(normPhone('+48 600-100-200'), '+48600100200');
+  assert.equal(normPhone('0048600100200'), '+48600100200');
+  assert.equal(normPhone('12345'), null);
+
+  const dev1 = browser();
+  const p = await dev1('/projects', { method: 'POST', body: { name: 'Mój dom', config: CFG } });
+  assert.equal((await dev1('/phone/start', { method: 'POST', body: { phone: 'abc' } })).status, 400);
+  const s1 = await dev1('/phone/start', { method: 'POST', body: { phone: '601 222 333' } });
+  assert.equal(s1.status, 200);
+  assert.equal(s1.body.test, true, 'bez SMSAPI_TOKEN — tryb testowy');
+  assert.match(s1.body.testCode, /^\d{6}$/);
+  const bad = await dev1('/phone/verify', { method: 'POST', body: { phone: '601222333', code: s1.body.testCode === '000000' ? '111111' : '000000' } });
+  assert.equal(bad.status, 400);
+  const ok = await dev1('/phone/verify', { method: 'POST', body: { phone: '601222333', code: s1.body.testCode } });
+  assert.equal(ok.status, 200);
+  assert.equal((await dev1('/me')).body.phone, '+48601222333');
+  assert.equal(get(`SELECT owner_phone FROM studio_projects WHERE id = ?`, p.body.id)!.owner_phone, '+48601222333');
+  // kod jednorazowy
+  assert.equal((await dev1('/phone/verify', { method: 'POST', body: { phone: '601222333', code: s1.body.testCode } })).status, 400);
+
+  // drugie urządzenie: ten sam numer → dostęp do projektu
+  const dev2 = browser();
+  assert.equal((await dev2(`/projects/${p.body.id}`)).status, 403);
+  const s2 = await dev2('/phone/start', { method: 'POST', body: { phone: '+48601222333' } });
+  const v2 = await dev2('/phone/verify', { method: 'POST', body: { phone: '+48601222333', code: s2.body.testCode } });
+  assert.equal(v2.status, 200);
+  assert.ok(v2.body.claimed >= 1);
+  assert.equal((await dev2(`/projects/${p.body.id}`)).status, 200);
+  // nowy projekt z urządzenia z numerem ma od razu przypisany numer
+  const p2 = await dev2('/projects', { method: 'POST', body: { name: 'Drugi', config: CFG } });
+  assert.equal(get(`SELECT owner_phone FROM studio_projects WHERE id = ?`, p2.body.id)!.owner_phone, '+48601222333');
+});
+
+test('limity są osobne: zdarzenia i wyszukiwania nie blokują rejestracji ani kodów SMS', async () => {
+  (await import('../src/studio/routes.ts')).resetRateLimits();
+  const z = browser();
+  for (let i = 0; i < 15; i++) await z('/events', { method: 'POST', body: { type: 'visit', page: 'landing' } });
+  for (let i = 0; i < 8; i++) await z('/contractors/nearby?postal=31-500');
+  const reg = await z('/contractors', { method: 'POST', body: { firstName: 'Limit', lastName: 'Test', email: 'limit@schody.pl', phone: '606 000 000', postalCode: '31-500', radiusKm: 30, leads: true } });
+  assert.equal(reg.status, 201);
+  assert.equal((await z('/phone/start', { method: 'POST', body: { phone: '606000000' } })).status, 200);
+});

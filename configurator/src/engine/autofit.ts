@@ -40,6 +40,7 @@ function spiralCands(c: Config): { cands: Cand[]; tested: number } {
         if (eff < LIMITS.spiralGoingWarn - 1e-9 || bl < LIMITS.blondelOkMin - 1e-9 || bl > LIMITS.blondelOkMax + 1e-9) continue;
         for (const entry of ENTRIES) {
           let cost = Math.abs(bl - 0.63) * 100 + Math.abs(h - 0.18) * 120 + Math.abs(eff - 0.25) * 60 + Math.max(0, 1.6 - d) * 15 + Math.max(0, d - 2.0) * 8;
+          if (h > LIMITS.riserWarn + 1e-9) cost += 25; // stopnie > 19 cm to ostrzeżenie — tylko gdy nie ma innej opcji
           if (entry !== c.stairs.entry) cost += 0.3;
           cands.push({ N, s: g, n1: N, ld: 0, w: d, d, entry, cost });
         }
@@ -110,16 +111,18 @@ function search(c: Config, shape: Shape, maxFull = 80): { best: Cand | null; tes
 
 function pickBest(c: Config, shape: Shape, cands: Cand[], maxFull: number): Cand | null {
   cands.sort((a, b) => a.cost - b.cost);
-  // pierwszy kandydat bez błędów; preferowany taki, który nie ma też ostrzeżeń
+  // pierwszy kandydat bez błędów i ostrzeżeń; inaczej ten z najmniejszą liczbą ostrzeżeń (przy remisie — tańszy)
   let fallback: Cand | null = null;
+  let fallbackWarn = Infinity;
   for (const k of cands.slice(0, maxFull)) {
     const cfg = applyPatch(c, { stairs: patchFor(shape, k).stairs });
     const q = quickSolve(cfg);
     if (!q.fit.fits || q.opening.headroomShortfalls.length) continue;
     const msgs = validate(cfg, q.calc, q.layout, q.fit, q.opening);
     if (msgs.some((x) => x.level === 'error')) continue;
-    if (!msgs.some((x) => x.level === 'warning')) return k;
-    fallback ??= k;
+    const warn = msgs.filter((x) => x.level === 'warning').length;
+    if (!warn) return k;
+    if (warn < fallbackWarn) { fallback = k; fallbackWarn = warn; }
   }
   return fallback;
 }

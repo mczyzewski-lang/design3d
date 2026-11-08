@@ -16,7 +16,7 @@ async function ctx() {
   p.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}`));
   p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) problems.push(`[console.error] ${m.text()}`); });
   // błędy HTTP — oczekiwany jest tylko 400 przy celowej próbie rejestracji bez zgody
-  p.on('response', (r) => { if (r.status() >= 400 && !(r.status() === 400 && /\/(contractor|quote-request)$/.test(r.url()))) problems.push(`[http ${r.status()}] ${r.url()}`); });
+  p.on('response', (r) => { if (r.status() >= 400 && !(r.status() === 400 && /\/(contractor|quote-request|phone\/verify)$/.test(r.url()))) problems.push(`[http ${r.status()}] ${r.url()}`); });
   return { c, p };
 }
 const answer = (p, text) => p.once('dialog', (d) => d.accept(text));
@@ -26,10 +26,12 @@ const { p: o } = await ctx();
 await o.goto(`${base}/konfigurator/`, { waitUntil: 'networkidle' });
 await o.waitForSelector('canvas'); await o.waitForTimeout(2000);
 answer(o, 'Schody — dom Kowalskich');
-await o.click('[data-testid="save"]');
+await o.click('[data-testid="save-menu"]');
+await o.click('[data-testid="save"]'); // „Zapisz projekt (bez udostępniania)” w menu ▾
 await o.waitForURL(/\?project=/);
 ok(/\?project=/.test(o.url()), 'pierwszy zapis tworzy projekt (adres ?project=)');
 await o.click('[data-testid="shape-L"]');
+await o.click('[data-testid="save-menu"]');
 await o.click('[data-testid="save"]');
 await o.waitForTimeout(600);
 await o.click('[data-testid="save-menu"]');
@@ -59,7 +61,23 @@ await o.waitForSelector('.pin-label.pin-owner', { timeout: 5000 });
 ok(true, 'kropka 3D z numerem po dodaniu komentarza');
 await o.waitForTimeout(500);
 await o.screenshot({ path: `${out}/1-wlasciciel-komentarz.png` });
-await o.click('[data-testid="share-project"]');
+// „Zapisz i udostępnij”: 1) numer telefonu + kod SMS (tryb testowy) 2) link 3) wykonawcy
+await o.click('[data-testid="save-share"]');
+await o.waitForSelector('[data-testid="step-phone"]');
+ok((await o.locator('[data-testid="open-find"]').isDisabled()) && (await o.locator('[data-testid="share-url"]').count()) === 0, 'kroki 2 i 3 widoczne, ale nieaktywne przed potwierdzeniem numeru');
+// losowy numer: limit 3 kodów na numer / 10 min nie blokuje kolejnych przebiegów
+await o.fill('[data-testid="phone-input"]', `6${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`);
+await o.click('[data-testid="phone-send"]');
+await o.waitForSelector('[data-testid="phone-test-code"]');
+const testCode = (await o.textContent('[data-testid="phone-test-code"] b')).trim();
+await o.fill('[data-testid="phone-code"]', testCode === '000000' ? '111111' : '000000');
+await o.click('[data-testid="phone-verify"]');
+await o.waitForSelector('[data-testid="phone-error"]');
+ok(true, 'błędny kod SMS — komunikat');
+await o.fill('[data-testid="phone-code"]', testCode);
+await o.click('[data-testid="phone-verify"]');
+await o.waitForSelector('[data-testid="phone-done"]');
+ok(true, 'numer potwierdzony kodem SMS (tryb testowy)');
 await o.waitForFunction(() => document.querySelector('[data-testid="share-url"]')?.value.includes('/konfigurator/p/'));
 const shareUrl = await o.inputValue('[data-testid="share-url"]');
 const mail = await o.getAttribute('[data-testid="share-email"]', 'href');
@@ -67,12 +85,9 @@ const sms = await o.getAttribute('[data-testid="share-sms"]', 'href');
 ok(mail.startsWith('mailto:') && decodeURIComponent(mail).includes(shareUrl), 'udostępnienie e-mailem (mailto z linkiem)');
 ok(sms.startsWith('sms:') && decodeURIComponent(sms).includes(shareUrl), 'udostępnienie SMS-em (sms: z linkiem)');
 await o.screenshot({ path: `${out}/2-udostepnij.png` });
-await o.keyboard.press('Escape');
-await o.mouse.click(5, 300); // zamknij okno udostępniania (kliknięcie w tło)
-await o.waitForTimeout(400);
 
-// ---- krok 2: znajdź wykonawcę z okolicy ----
-await o.click('[data-testid="find-contractor"]');
+// ---- krok 3: znajdź wykonawców z okolicy ----
+await o.click('[data-testid="open-find"]');
 await o.fill('[data-testid="quote-postal"]', '30061');
 await o.click('[data-testid="quote-search"]');
 await o.waitForSelector('[data-testid="nearby-results"]');
@@ -144,8 +159,9 @@ await o.waitForTimeout(1500);
 await o.waitForSelector('[data-testid="comments-card"]', { timeout: 90000 }); // projekt właściciela wczytuje się po przeładowaniu
 await o.click('[data-testid="comments-toggle"]');
 ok((await o.locator('text=Wycena: ok. 28 000').count()) > 0, 'właściciel widzi komentarz firmy');
-await o.click('[data-testid="share-project"]');
+await o.click('[data-testid="save-share"]');
 await o.waitForSelector('text=Firmy, które otworzyły projekt');
+ok((await o.locator('[data-testid="phone-done"]').count()) === 1, 'numer zapamiętany — krok 1 od razu zaliczony');
 ok((await o.locator('text=jan@schody-stolarz.pl').count()) > 0, 'właściciel widzi dane firmy');
 await o.screenshot({ path: `${out}/6-wlasciciel-firmy.png` });
 

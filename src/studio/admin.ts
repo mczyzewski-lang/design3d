@@ -31,6 +31,8 @@ export function studioAdminRouter(): express.Router {
       leadsOptIn: count(`SELECT COUNT(*) n FROM studio_contractors WHERE leads_opt_in = 1`),
       comments: count(`SELECT COUNT(*) n FROM studio_comments`),
       quoteRequests: count(`SELECT COUNT(*) n FROM studio_quote_requests`),
+      phones: count(`SELECT COUNT(*) n FROM studio_phones`),
+      projectsWithPhone: count(`SELECT COUNT(*) n FROM studio_projects WHERE owner_phone IS NOT NULL`),
     };
     const period = {
       projects: count(`SELECT COUNT(*) n FROM studio_projects WHERE created_at >= ?`, since),
