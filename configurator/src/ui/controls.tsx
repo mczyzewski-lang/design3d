@@ -90,14 +90,26 @@ export function Section({ index, title, open, onToggle, children, value, testId 
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     if (!open || !window.matchMedia('(max-width: 767px)').matches) return;
-    // po zwinięciu poprzedniej sekcji (animacja 220 ms) układ się przesuwa — przewijamy po niej i korygujemy
-    const go = (smooth: boolean) => ref.current?.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+    // po zwinięciu poprzedniej sekcji (animacja 220 ms) układ się przesuwa — przewijamy po niej i korygujemy.
+    // Cel liczony od faktycznej dolnej krawędzi sceny; w trakcie górny pasek się nie przełącza (data-autoscroll).
+    const go = (smooth: boolean) => {
+      const el = ref.current;
+      const scroller = el?.closest('[data-testid="scroller"]') as HTMLElement | null;
+      const main = document.querySelector('main')?.getBoundingClientRect();
+      if (!el || !scroller || !main) return;
+      const delta = el.getBoundingClientRect().top - main.bottom;
+      if (Math.abs(delta) <= 2) return;
+      document.documentElement.dataset.autoscroll = '1';
+      scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: smooth ? 'smooth' : 'auto' });
+    };
     const t1 = setTimeout(() => go(true), 260);
-    const t2 = setTimeout(() => { const r = ref.current?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); if (r && main && Math.abs(r.top - main.bottom) > 4) go(true); }, 760);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    // korekta dopiero po zakończeniu płynnego przewinięcia — natychmiastowa, żeby się nie nakładała
+    const t2 = setTimeout(() => go(false), 1000);
+    const t3 = setTimeout(() => { delete document.documentElement.dataset.autoscroll; }, 1200);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); delete document.documentElement.dataset.autoscroll; };
   }, [open]);
   return (
-    <div ref={ref} className="scroll-mt-[var(--scene-h,46vh)] border-t border-line md:scroll-mt-0" data-testid={testId}>
+    <div ref={ref} className="scroll-mt-[calc(var(--scene-h,46vh)+var(--chrome-h,56px))] border-t border-line md:scroll-mt-0" data-testid={testId}>
       <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line text-[10.5px] text-muted">{index}</span>
         <span className="flex-1 text-[13px] font-medium tracking-tight">{title}</span>

@@ -45,19 +45,41 @@ export default function App() {
     const el = scrollRef.current;
     if (!el) return;
     let last = el.scrollTop;
+    // pasek reaguje tylko na przewijanie przez użytkownika (dotyk z bezwładnością, kółko, klawisze) —
+    // nie na przewijanie programowe ani zmiany układu (zwijanie sekcji, uchwyt sceny)
+    let userUntil = 0;
+    const user = (ms: number) => () => { userUntil = Date.now() + ms; };
+    const onTouchMove = user(400);
+    const onTouchEnd = user(1600); // bezwładność iOS po puszczeniu palca
+    const onWheel = user(400);
+    const onKey = user(600);
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('keydown', onKey);
     const onScroll = () => {
       if (!window.matchMedia('(max-width: 767px)').matches) return;
       const y = el.scrollTop;
+      if (Date.now() > userUntil) { last = y; return; }
       // zmiana wysokości sceny uchwytem przesuwa treść — to nie jest przewijanie użytkownika
-      if (drag.current) { last = y; return; }
+      if (drag.current || document.documentElement.dataset.autoscroll) { last = y; return; }
       if (y > 80 && y - last > 6) setChromeHidden(true);
       else if (last - y > 12 || y < 24) setChromeHidden(false);
       last = y;
     };
     el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
-  useEffect(() => { useStudio.setState({ chromeHidden }); }, [chromeHidden]);
+  useEffect(() => {
+    useStudio.setState({ chromeHidden });
+    document.documentElement.style.setProperty('--chrome-h', chromeHidden ? '0px' : '56px');
+  }, [chromeHidden]);
   useEffect(() => { document.documentElement.style.setProperty('--scene-h', `${sceneH}px`); }, [sceneH]);
   // uchwyt pod sceną: przeciągnij, aby zmniejszyć / powiększyć podgląd (telefon)
   const onHandleDown = (e: React.PointerEvent) => {
@@ -80,11 +102,13 @@ export default function App() {
   if (crm) return <CrmShell />;
   return (
     <>
-    <div className={`flex h-full flex-col ${gate ? 'pointer-events-none select-none blur-[9px] saturate-[0.85] transition-[filter] duration-700' : ''}`} aria-hidden={gate}>
-      <div className={`relative z-30 shrink-0 transition-[margin] duration-300 ease-out md:mt-0 ${chromeHidden ? '-mt-14' : 'mt-0'}`} data-testid="topbar-wrap"><TopBar /></div>
+    <div className={`relative flex h-full flex-col ${gate ? 'pointer-events-none select-none blur-[9px] saturate-[0.85] transition-[filter] duration-700' : ''}`} aria-hidden={gate}>
+      {/* telefon: pasek leży NAD treścią i chowa się transformacją — bez zmiany układu, więc nie przerywa przewijania */}
+      <div className={`absolute inset-x-0 top-0 z-30 transition-transform duration-300 ease-out will-change-transform md:relative md:inset-auto md:shrink-0 md:translate-y-0 ${chromeHidden ? '-translate-y-full' : 'translate-y-0'}`} data-testid="topbar-wrap"><TopBar /></div>
       {/* telefon: scena przyklejona u góry, opcje przewijają się pod nią */}
-      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:flex-row md:overflow-visible" data-testid="scroller">
-        <main className="sticky top-0 z-20 h-[var(--scene-h,46vh)] shrink-0 bg-paper shadow-[0_10px_20px_-6px_rgba(0,0,0,0.28)] md:relative md:shadow-none md:z-auto md:h-auto md:min-h-0 md:min-w-0 md:flex-1 md:shrink">
+      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-14 md:flex-row md:overflow-visible md:pt-0" data-testid="scroller">
+        {/* przyklejenie liczone od wnętrza przewijania (po pt-14): pod paskiem top-0, na samej górze -top-14; zmiana „top” nie zmienia układu ani przewinięcia */}
+        <main className={`sticky z-20 h-[var(--scene-h,46vh)] shrink-0 bg-paper shadow-[0_10px_20px_-6px_rgba(0,0,0,0.28)] transition-[top] duration-300 ease-out md:relative md:top-auto md:z-auto md:h-auto md:min-h-0 md:min-w-0 md:flex-1 md:shrink md:shadow-none ${chromeHidden ? '-top-14' : 'top-0'}`}>
           <Suspense fallback={<div className="absolute inset-0 grid place-items-center text-[13px] text-muted">Ładowanie sceny 3D…</div>}>
             <Scene />
           </Suspense>
