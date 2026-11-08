@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, Copy, HardHat, House, KeyRound, Lock, Mail, MessageCirclePlus, MessageSquare, Save, Send, Share2, X } from 'lucide-react';
 import { useConfig } from '../store/store';
 import { isDirty, useStudio } from './studioStore';
+import { api } from './api';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -147,10 +148,10 @@ export function ShareDialog({ open, onClose, toast }: { open: boolean; onClose: 
         </button>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <a data-testid="share-email" aria-disabled={!url} href={url ? `mailto:?subject=${encodeURIComponent(`Projekt schodów: ${st.name}`)}&body=${encodeURIComponent(`Dzień dobry,\n\n${text}\n${url}\n\nPozdrawiam`)}` : undefined} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-[13px] hover:border-oak">
+        <a data-testid="share-email" aria-disabled={!url} href={url ? `mailto:?subject=${encodeURIComponent(`Projekt schodów: ${st.name}`)}&body=${encodeURIComponent(`Dzień dobry,\n\n${text}\n${url}?via=email\n\nPozdrawiam`)}` : undefined} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-[13px] hover:border-oak">
           <Mail size={15} /> Wyślij e-mailem
         </a>
-        <a data-testid="share-sms" aria-disabled={!url} href={url ? `sms:?&body=${encodeURIComponent(text + url)}` : undefined} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-[13px] hover:border-oak">
+        <a data-testid="share-sms" aria-disabled={!url} href={url ? `sms:?&body=${encodeURIComponent(`${text}${url}?via=sms`)}` : undefined} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-[13px] hover:border-oak">
           <MessageSquare size={15} /> Wyślij SMS-em
         </a>
       </div>
@@ -350,5 +351,98 @@ export function ShareGate() {
       </motion.div>
       </div>
     </div>
+  );
+}
+
+// ---------------- krok 2: znajdź wykonawcę z okolicy ----------------
+
+export function FindContractorCard() {
+  const role = useStudio((s) => s.role);
+  const [open, setOpen] = useState(false);
+  if (role !== 'local' && role !== 'owner') return null;
+  return (
+    <>
+      <div className="mx-3 mb-3 flex items-center gap-3 rounded-2xl border border-oak/40 bg-oak-soft/40 px-4 py-3" data-testid="find-contractor-card">
+        <div className="min-w-0 flex-1">
+          <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-oak">Krok 2 · bezpłatnie</div>
+          <div className="text-[13px] font-medium leading-tight">Znajdź wykonawcę z okolicy</div>
+        </div>
+        <button type="button" data-testid="find-contractor" onClick={() => setOpen(true)} className="shrink-0 rounded-full bg-ink px-3.5 py-2 text-[12px] font-medium text-white hover:bg-ink/85">Znajdź wykonawcę</button>
+      </div>
+      <FindContractorDialog open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+export function FindContractorDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const requestQuotes = useStudio((s) => s.requestQuotes);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', postalCode: '', radiusKm: '30', consent: false });
+  const [consentText, setConsentText] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<null | { nearby: number }>(null);
+  useEffect(() => {
+    if (!open) return;
+    setDone(null); setErrors([]);
+    if (!consentText) void api.me().then((m) => setConsentText(m.texts.quote)).catch(() => {});
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const input = 'mt-0.5 w-full rounded-lg border border-line px-3 py-2 text-[13.5px] outline-none focus:border-oak';
+  return (
+    <Modal open={open} onClose={onClose}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-[15px] font-semibold">Znajdź wykonawcę z okolicy</div>
+          <div className="text-[12px] text-muted">Bezpłatnie. Przekażemy Twój projekt firmom schodowym działającym w pobliżu — odezwą się z wyceną.</div>
+        </div>
+        <button type="button" onClick={onClose} className="text-muted hover:text-ink"><X size={18} /></button>
+      </div>
+      {done ? (
+        <div className="mt-4 rounded-xl bg-ok-soft p-3 text-[13px]" data-testid="quote-done">
+          <div className="font-medium">Dziękujemy! Zgłoszenie przyjęte.</div>
+          <div className="mt-1 text-ink/75">
+            {done.nearby > 0
+              ? `W naszej bazie są wykonawcy z Twojego obszaru (${done.nearby}). Przekażemy im projekt — wyceny trafią na podany kontakt.`
+              : 'Szukamy wykonawców w Twojej okolicy — przekażemy projekt, gdy tylko ich dopasujemy, i odezwiemy się na podany kontakt.'}
+          </div>
+          <button type="button" onClick={onClose} className="mt-3 rounded-lg bg-ink px-3 py-1.5 text-[12.5px] text-white">Zamknij</button>
+        </div>
+      ) : (
+        <form className="mt-4 grid gap-2.5" onSubmit={async (e) => {
+          e.preventDefault(); setBusy(true);
+          const r = await requestQuotes(form); setBusy(false);
+          if ('errors' in r) setErrors(r.errors); else setDone(r);
+        }}>
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="block"><span className="text-[11.5px] text-muted">Kod pocztowy inwestycji</span>
+              <input data-testid="quote-postal" required inputMode="numeric" autoComplete="postal-code" placeholder="00-000" maxLength={6} value={form.postalCode}
+                onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setForm({ ...form, postalCode: d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d }); }} className={input} />
+            </label>
+            <label className="block"><span className="text-[11.5px] text-muted">Szukaj w promieniu (km)</span>
+              <input data-testid="quote-radius" type="number" min={5} max={300} step={5} value={form.radiusKm} onChange={(e) => setForm({ ...form, radiusKm: e.target.value })} className={input} />
+            </label>
+          </div>
+          <label className="block"><span className="text-[11.5px] text-muted">Imię</span>
+            <input data-testid="quote-name" required autoComplete="given-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={input} />
+          </label>
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="block"><span className="text-[11.5px] text-muted">E-mail</span>
+              <input data-testid="quote-email" type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} />
+            </label>
+            <label className="block"><span className="text-[11.5px] text-muted">Telefon</span>
+              <input data-testid="quote-phone" type="tel" autoComplete="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} />
+            </label>
+          </div>
+          <p className="-mt-1 text-[11px] text-muted">Wystarczy e-mail albo telefon.</p>
+          <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
+            <input data-testid="quote-consent" type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5" />
+            <span>{consentText || 'Wyrażam zgodę na przekazanie projektu i kontaktu wykonawcom z mojej okolicy.'}</span>
+          </label>
+          {errors.length > 0 && <div className="rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad" data-testid="quote-errors">{errors.join('. ')}</div>}
+          <button type="submit" data-testid="quote-submit" disabled={busy} className="mt-1 rounded-2xl bg-ink py-3 text-[14px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
+            {busy ? 'Wysyłanie…' : 'Znajdź wykonawcę'}
+          </button>
+        </form>
+      )}
+    </Modal>
   );
 }

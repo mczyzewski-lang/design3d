@@ -16,7 +16,7 @@ async function ctx() {
   p.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}`));
   p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) problems.push(`[console.error] ${m.text()}`); });
   // błędy HTTP — oczekiwany jest tylko 400 przy celowej próbie rejestracji bez zgody
-  p.on('response', (r) => { if (r.status() >= 400 && !(r.status() === 400 && r.url().endsWith('/contractor'))) problems.push(`[http ${r.status()}] ${r.url()}`); });
+  p.on('response', (r) => { if (r.status() >= 400 && !(r.status() === 400 && /\/(contractor|quote-request)$/.test(r.url()))) problems.push(`[http ${r.status()}] ${r.url()}`); });
   return { c, p };
 }
 const answer = (p, text) => p.once('dialog', (d) => d.accept(text));
@@ -67,11 +67,32 @@ const sms = await o.getAttribute('[data-testid="share-sms"]', 'href');
 ok(mail.startsWith('mailto:') && decodeURIComponent(mail).includes(shareUrl), 'udostępnienie e-mailem (mailto z linkiem)');
 ok(sms.startsWith('sms:') && decodeURIComponent(sms).includes(shareUrl), 'udostępnienie SMS-em (sms: z linkiem)');
 await o.screenshot({ path: `${out}/2-udostepnij.png` });
+await o.keyboard.press('Escape');
+await o.mouse.click(5, 300); // zamknij okno udostępniania (kliknięcie w tło)
+await o.waitForTimeout(400);
+
+// ---- krok 2: znajdź wykonawcę z okolicy ----
+await o.click('[data-testid="find-contractor"]');
+await o.fill('[data-testid="quote-postal"]', '30061');
+await o.fill('[data-testid="quote-name"]', 'Anna');
+await o.fill('[data-testid="quote-email"]', 'anna@example.pl');
+await o.click('[data-testid="quote-submit"]');
+await o.waitForSelector('[data-testid="quote-errors"]');
+ok(/zgod/i.test(await o.textContent('[data-testid="quote-errors"]')), '„Znajdź wykonawcę” bez zgody — komunikat');
+await o.check('[data-testid="quote-consent"]');
+await o.click('[data-testid="quote-submit"]');
+await o.waitForSelector('[data-testid="quote-done"]');
+ok(true, '„Znajdź wykonawcę” — zgłoszenie z kodem pocztowym przyjęte');
+await o.click('[data-testid="quote-done"] button');
+
+// karta właściciela nie renderuje sceny w tle podczas kroków firmy (programowy render w CI jest wolny)
+const ownerUrl = o.url();
+await o.goto('about:blank');
 
 // ---- firma wykonawcza (nowa przeglądarka) ----
 const { p: f } = await ctx();
 await f.goto(shareUrl, { waitUntil: 'networkidle' });
-await f.waitForSelector('[data-testid="share-gate"]');
+await f.waitForSelector('[data-testid="share-gate"]', { timeout: 90000 }); // wolny render programowy przy dwóch kartach
 await f.waitForTimeout(2500);
 ok(true, 'bramka nad rozmytym projektem');
 await f.waitForSelector('[data-testid="gate-thumb-large"]', { timeout: 30000 });
@@ -113,7 +134,7 @@ await f.waitForTimeout(1500);
 ok((await f.locator('[data-testid="share-gate"]').count()) === 0, 'aktywna sesja firmy pomija bramkę');
 
 // ---- właściciel widzi odpowiedź i firmę ----
-await o.reload({ waitUntil: 'networkidle' });
+await o.goto(ownerUrl, { waitUntil: 'networkidle' });
 await o.waitForTimeout(1500);
 await o.waitForSelector('[data-testid="comments-card"]', { timeout: 90000 }); // projekt właściciela wczytuje się po przeładowaniu
 await o.click('[data-testid="comments-toggle"]');

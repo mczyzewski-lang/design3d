@@ -165,3 +165,65 @@ test('rejestracja firmy: zgoda na zapytania z okolicy wymaga kodu pocztowego i p
   assert.equal(again.status, 200);
   assert.equal(get(`SELECT leads_opt_in, postal_code FROM studio_contractors WHERE email = ?`, 'ewa@schody-nowak.pl')!.leads_opt_in, 0);
 });
+
+test('źródło projektu, otwarcia linku wg kanału i rejestracja z linku e-mail trafiają do analityki', async () => {
+  const p = await owner('/projects', { method: 'POST', body: { name: 'Z landingu', config: CFG, source: 'landing' } });
+  assert.equal(get(`SELECT source FROM studio_projects WHERE id = ?`, p.body.id)!.source, 'landing');
+  const sh = await owner(`/projects/${p.body.id}/share`, { method: 'POST' });
+  const viewer = browser();
+  await viewer(`/shares/${sh.body.token}?via=email`);
+  await viewer(`/shares/${sh.body.token}?via=sms`);
+  await owner(`/shares/${sh.body.token}`); // właściciel nie jest liczony
+  assert.equal(get(`SELECT COUNT(*) n FROM studio_events WHERE type = 'share_view' AND project_id = ?`, p.body.id)!.n, 2);
+  const reg = await viewer(`/shares/${sh.body.token}/contractor`, { method: 'POST', body: { firstName: 'Piotr', lastName: 'Kowal', email: 'piotr@kowal-schody.pl', phone: '602 300 400', consent: true, via: 'email' } });
+  assert.equal(reg.status, 200);
+  const c = get(`SELECT source, via, ref_project_id FROM studio_contractors WHERE email = ?`, 'piotr@kowal-schody.pl')!;
+  assert.deepEqual({ ...c }, { source: 'share_link', via: 'email', ref_project_id: p.body.id });
+});
+
+test('landing: zdarzenia anonimowe i dołączenie wykonawcy wymagające zgody, kodu i promienia', async () => {
+  const anon = browser();
+  assert.equal((await anon('/events', { method: 'POST', body: { type: 'visit', page: 'landing', source: 'Google<script>' } })).status, 204);
+  assert.equal((await anon('/events', { method: 'POST', body: { type: 'landing_shape', page: 'landing', detail: 'L-winders' } })).status, 204);
+  assert.equal((await anon('/events', { method: 'POST', body: { type: 'hack', page: 'x' } })).status, 204);
+  assert.equal(get(`SELECT source FROM studio_events WHERE type = 'visit' ORDER BY id DESC LIMIT 1`)!.source, 'googlescript');
+  assert.equal(get(`SELECT COUNT(*) n FROM studio_events WHERE type = 'hack'`)!.n, 0);
+  const form = { firstName: 'Adam', lastName: 'Dąb', email: 'adam@dab-schody.pl', phone: '603 400 500', postalCode: '31-100', radiusKm: 60 };
+  const no = await anon('/contractors', { method: 'POST', body: { ...form, leads: false } });
+  assert.equal(no.status, 400);
+  const ok = await anon('/contractors', { method: 'POST', body: { ...form, leads: true, source: 'landing' } });
+  assert.equal(ok.status, 201);
+  const row = get(`SELECT source, leads_opt_in, postal_code, consent_text FROM studio_contractors WHERE email = ?`, 'adam@dab-schody.pl')!;
+  assert.equal(row.source, 'landing');
+  assert.equal(row.leads_opt_in, 1);
+  assert.match(row.consent_text, /zapytania o wyceny/);
+});
+
+test('„Znajdź wykonawcę”: tylko właściciel, walidacja, liczba wykonawców z obszaru', async () => {
+  const body = { name: 'Anna', email: 'anna@example.pl', phone: '', postalCode: '31-500', radiusKm: 30, consent: true };
+  assert.equal((await stranger(`/projects/${projectId}/quote-request`, { method: 'POST', body })).status, 403);
+  const bad = await owner(`/projects/${projectId}/quote-request`, { method: 'POST', body: { ...body, email: '', postalCode: 'x', consent: false } });
+  assert.equal(bad.status, 400);
+  assert.ok(bad.body.errors.length >= 3);
+  const ok = await owner(`/projects/${projectId}/quote-request`, { method: 'POST', body });
+  assert.equal(ok.status, 201);
+  assert.ok(ok.body.nearby >= 1, 'wykonawca z 31-100 jest w obszarze 31');
+});
+
+test('panel admina: statystyki Stair Studio i zmiana statusu zgłoszenia', async () => {
+  const adminBase = base.replace('/api/studio', '/api/admin/studio');
+  const r = await fetch(`${adminBase}/stats?days=30`);
+  assert.equal(r.status, 200);
+  const s = await r.json();
+  assert.ok(s.totals.projects >= 2);
+  assert.ok(s.period.contractors >= 3);
+  assert.ok(s.contractorSources.some((x: any) => /e-mail/.test(x.label)));
+  assert.ok(s.contractorSources.some((x: any) => x.label === 'landing'));
+  assert.ok(s.projectSources.some((x: any) => x.label === 'landing'));
+  assert.ok(s.shareViewsVia.some((x: any) => x.label === 'SMS'));
+  assert.equal(s.series.length, 30);
+  assert.ok(s.quoteRequests[0].matches.some((m: any) => m.email === 'adam@dab-schody.pl'));
+  const u = await fetch(`${adminBase}/quote-requests/${s.quoteRequests[0].id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: 'sent' }) });
+  assert.equal(u.status, 200);
+  assert.equal(get(`SELECT status FROM studio_quote_requests WHERE id = ?`, s.quoteRequests[0].id)!.status, 'sent');
+});

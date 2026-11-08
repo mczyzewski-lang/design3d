@@ -5,6 +5,7 @@ import type { Config, Vec3 } from '../engine/types';
 import { useStore } from '../store/store';
 import { api, type CommentDto, type ContractorDto, type ContractorForm, type ProjectListItem, type VersionInfo } from './api';
 import { capture } from '../three/capture';
+import { firstTouchSource, shareVia } from '../analytics';
 
 export type Role = 'local' | 'owner' | 'contractor' | 'none';
 
@@ -57,6 +58,8 @@ interface StudioState {
   ensureShare: () => Promise<string | null>;
   ownerLink: () => Promise<string | null>;
   register: (form: ContractorForm) => Promise<string[] | null>;
+  /** „Znajdź wykonawcę”: zapisuje i udostępnia projekt, potem zgłasza go z kodem pocztowym. */
+  requestQuotes: (form: { name: string; email: string; phone: string; postalCode: string; radiusKm: string; consent: boolean }) => Promise<{ errors: string[] } | { nearby: number }>;
   continueAsOwner: () => Promise<boolean>;
   loadComments: () => Promise<void>;
   addComment: (text: string, pos: Vec3 | null) => Promise<boolean>;
@@ -96,7 +99,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     try {
       if (m) {
         const token = m[1];
-        const sh = await api.getShare(token);
+        const sh = await api.getShare(token, shareVia());
         useStore.getState().load(sh.config);
         set({ shareToken: token, name: sh.name, version: sh.currentVersion, savedJson: json(cfg()) });
         if (sh.role === 'owner' && sh.projectId) {
@@ -149,7 +152,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         set({ name: p.name, version: p.currentVersion, versions: p.versions, savedJson: json(cfg()) });
         uploadThumbnail(p.id);
       } else {
-        const p = await api.createProject(name ?? s.name, cfg());
+        const p = await api.createProject(name ?? s.name, cfg(), s.role === 'contractor' ? 'contractor_copy' : firstTouchSource());
         set({ projectId: p.id, name: p.name, version: p.currentVersion, versions: p.versions, role: 'owner', shareToken: null, savedJson: json(cfg()), comments: [] });
         history.replaceState(null, '', projectPath(p.id));
         uploadThumbnail(p.id);
@@ -214,7 +217,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const g = get().gate;
     if (!g) return null;
     try {
-      const r = await api.registerContractor(g.token, form);
+      const r = await api.registerContractor(g.token, form, shareVia());
       set({ role: 'contractor', viewerName: r.viewer.name, gate: null });
       useStore.getState().setView({ spin: false });
       await get().loadComments();
@@ -222,6 +225,19 @@ export const useStudio = create<StudioState>((set, get) => ({
     } catch (e) {
       const err = e as { errors?: string[]; message: string };
       return err.errors ?? [err.message];
+    }
+  },
+
+  requestQuotes: async (form) => {
+    try {
+      const url = await get().ensureShare();
+      const id = get().projectId;
+      if (!url || !id) return { errors: [get().error ?? 'Nie udało się zapisać projektu'] };
+      const r = await api.quoteRequest(id, form);
+      return { nearby: r.nearby };
+    } catch (e) {
+      const err = e as { errors?: string[]; message: string };
+      return { errors: err.errors ?? [err.message] };
     }
   },
 

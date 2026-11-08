@@ -33,7 +33,7 @@ async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T>
 }
 
 export const api = {
-  createProject: (name: string, config: Config) => call<ProjectDto>('/projects', 'POST', { name, config }),
+  createProject: (name: string, config: Config, source?: string) => call<ProjectDto>('/projects', 'POST', { name, config, source }),
   listProjects: () => call<ProjectListItem[]>('/projects'),
   getProject: (id: string) => call<ProjectDto>(`/projects/${id}`),
   getVersion: (id: string, v: number) => call<{ version: number; label: string; config: Config }>(`/projects/${id}/versions/${v}`),
@@ -42,11 +42,15 @@ export const api = {
   share: (id: string) => call<{ token: string; path: string }>(`/projects/${id}/share`, 'POST'),
   ownerLink: (id: string) => call<{ path: string }>(`/projects/${id}/owner-link`, 'POST'),
   claim: (projectId: string, token: string) => call<{ ok: true }>('/claim', 'POST', { projectId, token }),
-  getShare: (token: string) => call<ShareDto>(`/shares/${token}`),
+  getShare: (token: string, via?: string) => call<ShareDto>(`/shares/${token}${via ? `?via=${via}` : ''}`),
   putThumbnail: (id: string, image: string) => call<{ ok: true }>(`/projects/${id}/thumbnail`, 'PUT', { image }),
   thumbnailUrl: (token: string, v: string) => `/api/studio/shares/${token}/thumbnail?v=${encodeURIComponent(v)}`,
-  registerContractor: (token: string, form: ContractorForm) =>
-    call<{ role: 'contractor'; viewer: { name: string } }>(`/shares/${token}/contractor`, 'POST', form),
+  registerContractor: (token: string, form: ContractorForm, via?: string) =>
+    call<{ role: 'contractor'; viewer: { name: string } }>(`/shares/${token}/contractor`, 'POST', { ...form, via }),
+  joinAsContractor: (form: Omit<ContractorForm, 'consent'> & { source?: string }) => call<{ ok: true }>('/contractors', 'POST', form),
+  quoteRequest: (id: string, form: { name: string; email: string; phone: string; postalCode: string; radiusKm: string; consent: boolean }) =>
+    call<{ ok: true; nearby: number }>(`/projects/${id}/quote-request`, 'POST', form),
+  me: () => call<{ owner: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string } }>('/me'),
   comments: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }) =>
     call<CommentDto[]>(ref.owner && ref.projectId ? `/projects/${ref.projectId}/comments` : `/shares/${ref.shareToken}/comments`),
   addComment: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }, text: string, pos: Vec3 | null) =>

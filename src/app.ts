@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.ts';
 import { apiRouter } from './api/routes.ts';
 import { studioRouter } from './studio/routes.ts';
+import { studioAdminRouter } from './studio/admin.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CONFIGURATOR_DIST = path.join(here, '..', 'configurator', 'dist');
@@ -45,8 +46,13 @@ export function createApp(): express.Express {
     next();
   });
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
-  // Strona główna: publiczny konfigurator 3D schodów (Stair Studio, osobna aplikacja Vite w configurator/)
-  app.get('/', (_req, res) => res.redirect('/konfigurator/'));
+  // Strona główna: landing Stair Studio (statyczna strona z buildu Vite w configurator/) → konfigurator 3D
+  app.get('/', (_req, res) => {
+    const landing = path.join(CONFIGURATOR_DIST, 'landing.html');
+    if (!fs.existsSync(landing)) return res.redirect('/konfigurator/');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(landing);
+  });
   app.use('/konfigurator', express.static(CONFIGURATOR_DIST, { index: 'index.html', maxAge: '1h', setHeaders: (res, file) => {
     if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     else if (file.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
@@ -59,5 +65,6 @@ export function createApp(): express.Express {
   app.use('/api/studio', studioRouter());
   app.use('/admin', adminAuth, express.static(path.join(here, '..', 'public', 'admin'), { index: 'index.html' }));
   app.use('/api/admin/lead-discovery', adminAuth, apiRouter());
+  app.use('/api/admin/studio', adminAuth, studioAdminRouter());
   return app;
 }

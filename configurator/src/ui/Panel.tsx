@@ -8,9 +8,10 @@ import type { EntryDir, SideMode, WallKey } from '../engine/types';
 import { useConfig, useSolved, useStore } from '../store/store';
 import { woodSwatch } from '../three/woodCanvas';
 import { AnalysisCard } from './AnalysisCard';
-import { CommentsCard } from '../studio/StudioUI';
+import { CommentsCard, FindContractorCard } from '../studio/StudioUI';
 import { Field, Section, Segmented, SliderField, Thumb, Toggle } from './controls';
 import { LED_MODES } from '../engine/led';
+import { shapePatch } from '../engine/presets';
 import { RailingThumb, ShapeThumb, StepStyleThumb, StructureThumb } from './thumbs';
 import { downloadJson, exportPayload } from './fileOps';
 
@@ -29,6 +30,7 @@ export function Panel() {
   return (
     <aside className="flex flex-col bg-panel scrollbar-thin md:h-full md:overflow-y-auto" data-testid="panel">
       <AnalysisCard />
+      <FindContractorCard />
       <CommentsCard />
       <Section index={1} title="Typ schodów" open={open === 1} onToggle={() => t(1)}><TypeSection /></Section>
       <Section index={2} title="Wymiary przestrzeni" open={open === 2} onToggle={() => t(2)}><DimensionsSection /></Section>
@@ -51,7 +53,7 @@ function TypeSection() {
     <div>
       <div className="grid grid-cols-4 gap-1.5">
         {(['I', 'L', 'U', 'S'] as const).map((sh) => (
-          <Thumb key={sh} testId={`shape-${sh}`} active={s.shape === sh} onClick={() => setStairs(sh === 'S' ? { shape: sh, going: Math.min(s.going, 0.24) } : { shape: sh, winders: sh === 'U' ? Math.max(4, Math.min(7, s.winders * 2)) : sh === 'L' ? Math.min(4, Math.max(2, Math.round(s.winders / 2))) : s.winders })} label={SHAPE_LABEL[sh].split(' (')[0]} sub={sh === 'S' ? 'spiralne' : sh}>
+          <Thumb key={sh} testId={`shape-${sh}`} active={s.shape === sh} onClick={() => setStairs(shapePatch(s, sh))} label={SHAPE_LABEL[sh].split(' (')[0]} sub={sh === 'S' ? 'spiralne' : sh}>
             <ShapeThumb shape={sh} />
           </Thumb>
         ))}

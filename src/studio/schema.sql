@@ -89,3 +89,31 @@ CREATE TABLE IF NOT EXISTS studio_thumbnails (
   data       BLOB NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- anonimowe zdarzenia do analityki (bez danych osobowych i bez IP)
+CREATE TABLE IF NOT EXISTS studio_events (
+  id         INTEGER PRIMARY KEY,
+  type       TEXT NOT NULL,          -- visit | share_view | landing_shape
+  page       TEXT,                   -- landing | configurator | share
+  source     TEXT,                   -- pierwsze źródło wejścia (landing, google, direct, utm…)
+  via        TEXT,                   -- kanał udostępnienia linku: link | email | sms
+  project_id TEXT,
+  detail     TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_studio_events_type ON studio_events(type, created_at);
+
+-- „Znajdź wykonawcę”: zgłoszenie właściciela projektu z kodem pocztowym
+CREATE TABLE IF NOT EXISTS studio_quote_requests (
+  id           INTEGER PRIMARY KEY,
+  project_id   TEXT NOT NULL REFERENCES studio_projects(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  email        TEXT,
+  phone        TEXT,
+  postal_code  TEXT NOT NULL,
+  radius_km    INTEGER NOT NULL,
+  consent_text TEXT NOT NULL,
+  consent_at   TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'new',   -- new | sent | closed
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);

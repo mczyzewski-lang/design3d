@@ -101,3 +101,9 @@ export function applyCollection(cfg: Config, key: string): Config {
     lighting: { ...cfg.lighting, ...(c.lighting ?? {}) },
   };
 }
+
+/** Zmiana układu schodów z zachowaniem sensownych parametrów (krok dla kręconych, liczba zabiegów). */
+export function shapePatch(s: { going: number; winders: number }, sh: 'I' | 'L' | 'U' | 'S'): Partial<import('./types').StairConfig> {
+  if (sh === 'S') return { shape: sh, going: Math.min(s.going, 0.24) };
+  return { shape: sh, winders: sh === 'U' ? Math.max(4, Math.min(7, s.winders * 2)) : sh === 'L' ? Math.min(4, Math.max(2, Math.round(s.winders / 2))) : s.winders };
+}

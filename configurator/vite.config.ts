@@ -13,6 +13,8 @@ export default defineConfig({
     outDir: 'dist',
     chunkSizeWarningLimit: 1600,
     rollupOptions: {
+      // dwie strony: konfigurator (index.html) i landing strony głównej (landing.html, serwowany pod „/”)
+      input: { main: 'index.html', landing: 'landing.html' },
       output: {
         manualChunks(id: string) {
           if (/node_modules\/(react|react-dom|scheduler|zustand|use-sync-external-store)\//.test(id)) return 'react';

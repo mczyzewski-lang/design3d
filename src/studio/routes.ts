@@ -14,12 +14,18 @@ export function ensureStudioSchema(): void {
   if (schemaReady) return;
   exec(fs.readFileSync(path.join(here, 'schema.sql'), 'utf8'));
   // migracje kolumn dodanych po pierwszym wdrożeniu (CREATE TABLE IF NOT EXISTS ich nie doda)
-  const cols = new Set(all(`PRAGMA table_info(studio_contractors)`).map((c) => c.name as string));
-  const add: Array<[string, string]> = [
-    ['leads_opt_in', 'INTEGER NOT NULL DEFAULT 0'], ['postal_code', 'TEXT'], ['radius_km', 'INTEGER'],
-    ['leads_consent_text', 'TEXT'], ['leads_consent_at', 'TEXT'],
-  ];
-  for (const [n, def] of add) if (!cols.has(n)) exec(`ALTER TABLE studio_contractors ADD COLUMN ${n} ${def}`);
+  const migrate: Record<string, Array<[string, string]>> = {
+    studio_contractors: [
+      ['leads_opt_in', 'INTEGER NOT NULL DEFAULT 0'], ['postal_code', 'TEXT'], ['radius_km', 'INTEGER'],
+      ['leads_consent_text', 'TEXT'], ['leads_consent_at', 'TEXT'],
+      ['source', 'TEXT'], ['via', 'TEXT'], ['ref_project_id', 'TEXT'],
+    ],
+    studio_projects: [['source', 'TEXT']],
+  };
+  for (const [table, list] of Object.entries(migrate)) {
+    const cols = new Set(all(`PRAGMA table_info(${table})`).map((c) => c.name as string));
+    for (const [n, def] of list) if (!cols.has(n)) exec(`ALTER TABLE ${table} ADD COLUMN ${n} ${def}`);
+  }
   schemaReady = true;
 }
 
@@ -29,6 +35,17 @@ export const CONSENT_TEXT =
 /** Dobrowolna, osobna zgoda na zapytania o wyceny z okolicy (marketing). */
 export const LEADS_TEXT = 'Chcę bezpłatnie otrzymywać zapytania o wyceny schodów z mojej okolicy.';
 const MAX_THUMB = 600_000; // bajtów po zdekodowaniu
+export const QUOTE_CONSENT_TEXT =
+  'Wyrażam zgodę na przekazanie mojego projektu schodów oraz danych kontaktowych wykonawcom z mojej okolicy przez design3d.pl w celu przygotowania wyceny. Zgodę mogę wycofać w każdej chwili.';
+
+/** Źródło / kanał: krótka etykieta [a-z0-9._:-], np. „landing”, „google”, „utm:facebook”. */
+export const cleanTag = (v: unknown, max = 60) => String(v ?? '').toLowerCase().replace(/[^a-z0-9._:-]/g, '').slice(0, max) || null;
+const VIA = new Set(['link', 'email', 'sms']);
+const cleanVia = (v: unknown) => (VIA.has(String(v)) ? String(v) : null);
+const normPostal = (v: unknown): string => {
+  const d = String(v ?? '').replace(/\D/g, '');
+  return d.length === 5 ? `${d.slice(0, 2)}-${d.slice(2)}` : '';
+};
 
 const OWNER_COOKIE = 'ss_owner';
 const SESSION_COOKIE = 'ss_session';
@@ -141,7 +158,10 @@ export function studioRouter(): express.Router {
   // ---------- projekty (właściciel) ----------
   r.get('/me', (req, res) => {
     const c = contractorOf(req);
-    res.json({ owner: !!cookies(req)[OWNER_COOKIE], contractor: c ? { name: `${c.first_name} ${c.last_name}`, email: c.email } : null });
+    res.json({
+      owner: !!cookies(req)[OWNER_COOKIE], contractor: c ? { name: `${c.first_name} ${c.last_name}`, email: c.email } : null,
+      texts: { consent: CONSENT_TEXT, leads: LEADS_TEXT, quote: QUOTE_CONSENT_TEXT },
+    });
   });
 
   r.post('/projects', wrap((req, res) => {
@@ -151,7 +171,7 @@ export function studioRouter(): express.Router {
     const key = ownerKey(req, res, true)!;
     const id = token(9);
     tx(() => {
-      run(`INSERT INTO studio_projects (id, name) VALUES (?, ?)`, id, name);
+      run(`INSERT INTO studio_projects (id, name, source) VALUES (?, ?, ?)`, id, name, cleanTag(req.body?.source));
       run(`INSERT INTO studio_project_owners (project_id, owner_key_hash) VALUES (?, ?)`, id, sha(key));
       run(`INSERT INTO studio_versions (project_id, version, label, config) VALUES (?, 1, ?, ?)`, id, cleanName(req.body?.label, 80) || 'Wersja 1', cfg);
     });
@@ -310,6 +330,10 @@ export function studioRouter(): express.Router {
     const view = projectView(s.project_id)!;
     const acc = accessFor(req, s.project_id);
     if (acc.contractor) touch(s.project_id, acc.contractor.id);
+    if (acc.role !== 'owner') {
+      run(`INSERT INTO studio_events (type, page, via, project_id, detail) VALUES ('share_view', 'share', ?, ?, ?)`,
+        cleanVia(req.query.via) ?? 'link', s.project_id, acc.role);
+    }
     res.json({
       projectId: acc.role === 'owner' ? s.project_id : undefined,
       name: view.name, config: view.config, currentVersion: view.currentVersion, role: acc.role,
@@ -328,11 +352,12 @@ export function studioRouter(): express.Router {
     res.type(t.mime as string).send(Buffer.from(t.data as Uint8Array));
   });
 
-  /** Błyskawiczna rejestracja firmy wykonawczej. */
-  r.post('/shares/:token/contractor', wrap((req, res) => {
-    const s = shareOf(req, res);
-    if (!s) return;
-    if (rateLimited(req)) return res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' });
+  /**
+   * Rejestracja firmy wykonawczej: z udostępnionego linku (dostęp do projektu) albo z landingu
+   * (tylko zgłoszenie do bazy wykonawców). Zwraca id firmy albo null, gdy odpowiedź już wysłano.
+   */
+  const registerContractor = (req: Request, res: Response, origin: { source: string; via?: string | null; projectId?: string; consentRequired: boolean }): number | null => {
+    if (rateLimited(req)) { res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' }); return null; }
     const b = req.body ?? {};
     const first = cleanName(b.firstName, 60);
     const last = cleanName(b.lastName, 80);
@@ -343,35 +368,92 @@ export function studioRouter(): express.Router {
     if (!last) errors.push('Podaj nazwisko');
     if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) errors.push('Podaj poprawny e-mail');
     if (phone.replace(/\D/g, '').length < 9) errors.push('Podaj poprawny numer telefonu');
-    if (b.consent !== true) errors.push('Zaznacz zgodę, aby zobaczyć projekt');
+    if (origin.consentRequired && b.consent !== true) errors.push('Zaznacz zgodę, aby zobaczyć projekt');
     const leads = b.leads === true;
-    const pc = String(b.postalCode ?? '').replace(/\s/g, '');
-    const postal = /^\d{2}-?\d{3}$/.test(pc) ? `${pc.replace('-', '').slice(0, 2)}-${pc.replace('-', '').slice(2)}` : '';
+    const postal = normPostal(b.postalCode);
     const radius = Math.round(Number(b.radiusKm));
     if (leads && !postal) errors.push('Podaj kod pocztowy w formacie 00-000');
     if (leads && !(radius >= 5 && radius <= 300)) errors.push('Podaj promień od 5 do 300 km');
-    if (errors.length) return res.status(400).json({ error: errors.join('. '), errors });
+    if (!origin.consentRequired && !leads) errors.push('Zaznacz zgodę na otrzymywanie zapytań z okolicy');
+    if (errors.length) { res.status(400).json({ error: errors.join('. '), errors }); return null; }
     // zgoda na zapytania z okolicy: zapis z treścią i datą; odznaczenie przy ponownej rejestracji ją wycofuje
     const setLeads = (id: number) => run(
       `UPDATE studio_contractors SET leads_opt_in = ?, postal_code = ?, radius_km = ?, leads_consent_text = ?, leads_consent_at = ? WHERE id = ?`,
       leads ? 1 : 0, leads ? postal : null, leads ? radius : null, leads ? LEADS_TEXT : null, leads ? nowIso() : null, id,
     );
+    const consentText = origin.consentRequired ? CONSENT_TEXT : LEADS_TEXT;
     const contractorId = tx(() => {
       const ex = get(`SELECT id FROM studio_contractors WHERE email = ?`, email);
       if (ex) {
-        run(`UPDATE studio_contractors SET first_name = ?, last_name = ?, phone = ?, consent_text = ?, consent_at = ? WHERE id = ?`, first, last, phone, CONSENT_TEXT, nowIso(), ex.id);
+        run(`UPDATE studio_contractors SET first_name = ?, last_name = ?, phone = ?, consent_text = ?, consent_at = ? WHERE id = ?`, first, last, phone, consentText, nowIso(), ex.id);
         setLeads(ex.id as number);
         return ex.id as number;
       }
-      const id = Number(run(`INSERT INTO studio_contractors (first_name, last_name, email, phone, consent_text, consent_at) VALUES (?, ?, ?, ?, ?, ?)`, first, last, email, phone, CONSENT_TEXT, nowIso()).lastInsertRowid);
+      const id = Number(run(
+        `INSERT INTO studio_contractors (first_name, last_name, email, phone, consent_text, consent_at, source, via, ref_project_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        first, last, email, phone, consentText, nowIso(), origin.source, origin.via ?? null, origin.projectId ?? null,
+      ).lastInsertRowid);
       setLeads(id);
       return id;
     });
     const t = token(24);
     run(`INSERT INTO studio_sessions (token_hash, contractor_id, expires_at) VALUES (?, ?, ?)`, sha(t), contractorId, new Date(Date.now() + 90 * 86400_000).toISOString());
     setCookie(req, res, SESSION_COOKIE, t, 90 * 86400_000);
-    touch(s.project_id, contractorId);
-    res.json({ role: 'contractor', viewer: { name: `${first} ${last}` } });
+    return contractorId;
+  };
+
+  /** Błyskawiczna rejestracja firmy wykonawczej z udostępnionego linku. */
+  r.post('/shares/:token/contractor', wrap((req, res) => {
+    const s = shareOf(req, res);
+    if (!s) return;
+    const id = registerContractor(req, res, { source: 'share_link', via: cleanVia(req.body?.via) ?? 'link', projectId: s.project_id, consentRequired: true });
+    if (id === null) return;
+    touch(s.project_id, id);
+    const c = get(`SELECT first_name, last_name FROM studio_contractors WHERE id = ?`, id)!;
+    res.json({ role: 'contractor', viewer: { name: `${c.first_name} ${c.last_name}` } });
+  }));
+
+  /** Dołączenie wykonawcy z landingu — do bazy firm otrzymujących zapytania z okolicy. */
+  r.post('/contractors', wrap((req, res) => {
+    const id = registerContractor(req, res, { source: cleanTag(req.body?.source) ?? 'landing', consentRequired: false });
+    if (id === null) return;
+    res.status(201).json({ ok: true });
+  }));
+
+  /** Anonimowe zdarzenia (wejście na landing / do konfiguratora, wybór układu na landingu). */
+  const EVENT_TYPES = new Set(['visit', 'landing_shape']);
+  const PAGES = new Set(['landing', 'configurator']);
+  r.post('/events', (req, res) => {
+    const b = req.body ?? {};
+    if (!EVENT_TYPES.has(b.type) || rateLimited(req, 120, 10 * 60_000)) return res.status(204).end();
+    run(`INSERT INTO studio_events (type, page, source, detail) VALUES (?, ?, ?, ?)`,
+      b.type, PAGES.has(b.page) ? b.page : null, cleanTag(b.source), cleanTag(b.detail, 40));
+    res.status(204).end();
+  });
+
+  /** „Znajdź wykonawcę”: właściciel zostawia kod pocztowy i kontakt — dopasowanie w panelu admina. */
+  r.post('/projects/:id/quote-request', wrap((req, res) => {
+    const id = ownerOnly(req, res);
+    if (!id) return;
+    const b = req.body ?? {};
+    const name = cleanName(b.name, 80);
+    const email = String(b.email ?? '').trim().toLowerCase().slice(0, 160);
+    const phone = String(b.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20);
+    const postal = normPostal(b.postalCode);
+    const radius = Math.round(Number(b.radiusKm ?? 30));
+    const errors: string[] = [];
+    if (!name) errors.push('Podaj imię');
+    if (!postal) errors.push('Podaj kod pocztowy w formacie 00-000');
+    if (!(radius >= 5 && radius <= 300)) errors.push('Podaj promień od 5 do 300 km');
+    const okEmail = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email);
+    const okPhone = phone.replace(/\D/g, '').length >= 9;
+    if (!okEmail && !okPhone) errors.push('Podaj e-mail lub telefon, abyśmy mogli przekazać wyceny');
+    if (b.consent !== true) errors.push('Zaznacz zgodę na przekazanie projektu wykonawcom');
+    if (errors.length) return res.status(400).json({ error: errors.join('. '), errors });
+    run(`INSERT INTO studio_quote_requests (project_id, name, email, phone, postal_code, radius_km, consent_text, consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, name, okEmail ? email : null, okPhone ? phone : null, postal, radius, QUOTE_CONSENT_TEXT, nowIso());
+    const nearby = get(`SELECT COUNT(*) AS n FROM studio_contractors WHERE leads_opt_in = 1 AND substr(postal_code, 1, 2) = ?`, postal.slice(0, 2))!.n as number;
+    res.status(201).json({ ok: true, nearby });
   }));
 
   r.get('/shares/:token/comments', (req, res) => {
