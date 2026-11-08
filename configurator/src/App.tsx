@@ -90,6 +90,12 @@ export default function App() {
           </Suspense>
           <ProjectionFade />
           <div className="pointer-events-none absolute inset-x-3 top-2 flex justify-start md:top-3"><InfoBar /></div>
+          {/* telefon: po schowaniu górnego paska wjeżdża sam symbol design3d; stuknięcie przywraca pasek */}
+          <button type="button" aria-label="design3d — pokaż górny pasek" data-testid="floating-mark" tabIndex={chromeHidden ? 0 : -1}
+            onClick={() => { scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); setChromeHidden(false); }}
+            className={`absolute right-3 top-2 z-10 transition-all duration-300 ease-out md:hidden ${chromeHidden ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-16 opacity-0'}`}>
+            <img src={`${import.meta.env.BASE_URL}brand/design3d-mark.svg`} alt="design3d" width={36} height={36} className="h-9 w-9 rounded-[10px] shadow-[0_4px_14px_rgba(0,0,0,0.25)]" />
+          </button>
           <div className="pointer-events-none absolute inset-x-3 bottom-2 flex flex-col items-start gap-2 md:bottom-3 md:items-center"><CommentComposer /><BottomBar /></div>
           <div className="absolute inset-x-0 -bottom-1 z-10 flex justify-center md:hidden">
             <button type="button" aria-label="Przeciągnij, aby zmienić wysokość podglądu 3D" data-testid="scene-handle"
