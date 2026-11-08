@@ -3,7 +3,8 @@
 
 import express from 'express';
 import { all, get, run } from '../db/index.ts';
-import { ensureStudioSchema } from './routes.ts';
+import { SEARCH_RADIUS_KM, ensureStudioSchema, nearbyContractors } from './routes.ts';
+import { geocodePostal } from './geo/postal.ts';
 
 const DAY = 86400_000;
 
@@ -92,7 +93,7 @@ export function studioAdminRouter(): express.Router {
          FROM studio_projects p ORDER BY p.created_at DESC LIMIT 50`,
       ),
       recentContractors: all(
-        `SELECT c.id, c.first_name, c.last_name, c.email, c.phone, c.source, c.via, c.created_at, c.leads_opt_in, c.postal_code, c.radius_km,
+        `SELECT c.id, c.first_name, c.last_name, c.company_name, c.listed, c.email, c.phone, c.source, c.via, c.created_at, c.leads_opt_in, c.postal_code, c.radius_km,
            p.name project_name, (SELECT COUNT(*) FROM studio_access a WHERE a.contractor_id = c.id) projects
          FROM studio_contractors c LEFT JOIN studio_projects p ON p.id = c.ref_project_id ORDER BY c.created_at DESC LIMIT 50`,
       ).map((c) => ({ ...c, channel: channel(c.source, c.via) })),
@@ -100,14 +101,17 @@ export function studioAdminRouter(): express.Router {
         `SELECT q.id, q.project_id, p.name project_name, q.name, q.email, q.phone, q.postal_code, q.radius_km, q.status, q.created_at,
            (SELECT token FROM studio_shares s WHERE s.project_id = q.project_id ORDER BY s.created_at LIMIT 1) share_token
          FROM studio_quote_requests q JOIN studio_projects p ON p.id = q.project_id ORDER BY q.created_at DESC LIMIT 50`,
-      ).map((q) => ({
-        ...q,
-        // przybliżone dopasowanie: ten sam obszar kodu pocztowego (pierwsze 2 cyfry)
-        matches: all(
-          `SELECT first_name, last_name, email, phone, postal_code, radius_km FROM studio_contractors WHERE leads_opt_in = 1 AND substr(postal_code, 1, 2) = ? ORDER BY created_at DESC LIMIT 20`,
-          String(q.postal_code).slice(0, 2),
-        ),
-      })),
+      ).map((q) => {
+        // wykonawcy z kontaktem: wybrani przez inwestora + pozostali w promieniu (także niewidoczni w wyszukiwarce)
+        const contact = (id: number) => get(`SELECT first_name, last_name, company_name, email, phone, postal_code, radius_km FROM studio_contractors WHERE id = ?`, id);
+        const selected = all(`SELECT contractor_id, distance_km FROM studio_quote_request_contractors WHERE request_id = ? ORDER BY distance_km`, q.id)
+          .map((x) => ({ ...contact(x.contractor_id as number), distanceKm: x.distance_km }));
+        const g = geocodePostal(q.postal_code);
+        const sel = new Set(all(`SELECT contractor_id FROM studio_quote_request_contractors WHERE request_id = ?`, q.id).map((x) => x.contractor_id));
+        const matches = g ? nearbyContractors(g, Math.max(Number(q.radius_km), SEARCH_RADIUS_KM), true)
+          .filter((c) => !sel.has(c.id)).slice(0, 20).map((c) => ({ ...contact(c.id), distanceKm: c.distanceKm })) : [];
+        return { ...q, place: g?.place ?? null, selected, matches };
+      }),
     });
   });
 

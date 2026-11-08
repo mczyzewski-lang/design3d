@@ -117,3 +117,11 @@ CREATE TABLE IF NOT EXISTS studio_quote_requests (
   status       TEXT NOT NULL DEFAULT 'new',   -- new | sent | closed
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- wykonawcy wybrani przez inwestora w tabeli „Znajdź wykonawców”
+CREATE TABLE IF NOT EXISTS studio_quote_request_contractors (
+  request_id    INTEGER NOT NULL REFERENCES studio_quote_requests(id) ON DELETE CASCADE,
+  contractor_id INTEGER NOT NULL REFERENCES studio_contractors(id) ON DELETE CASCADE,
+  distance_km   REAL,
+  PRIMARY KEY (request_id, contractor_id)
+);

@@ -227,3 +227,45 @@ test('panel admina: statystyki Stair Studio i zmiana statusu zgłoszenia', async
   assert.equal(u.status, 200);
   assert.equal(get(`SELECT status FROM studio_quote_requests WHERE id = ?`, s.quoteRequests[0].id)!.status, 'sent');
 });
+
+test('geolokalizacja kodów pocztowych: dokładny, przybliżony, odległości', async () => {
+  const { geocodePostal, distanceKm } = await import('../src/studio/geo/postal.ts');
+  const krk = geocodePostal('31-500')!;
+  assert.equal(krk.place, 'Kraków');
+  assert.equal(geocodePostal('00-001')!.place, 'Warszawa'); // brak w danych → najbliższy kod z grupy
+  assert.equal(geocodePostal('abc'), null);
+  const d = distanceKm(krk, geocodePostal('02-495')!);
+  assert.ok(d > 240 && d < 300, `Kraków–Warszawa ≈ 250–290 km, jest ${d}`);
+});
+
+test('wyszukiwarka wykonawców: promień 50 km, najbliżsi pierwsi, bez danych kontaktowych', async () => {
+  (await import('../src/studio/routes.ts')).resetRateLimits();
+  const z = browser();
+  const reg = (email: string, postalCode: string, companyName: string, radiusKm = 50) => z('/contractors', { method: 'POST', body: { firstName: 'Firma', lastName: 'Testowa', companyName, email, phone: '605 000 000', postalCode, radiusKm, leads: true } });
+  assert.equal((await reg('wieliczka@schody.pl', '32-020', 'Schody Wieliczka', 20)).status, 201);
+  assert.equal((await reg('gdansk@schody.pl', '80-180', 'Schody Gdańsk')).status, 201);
+  const r = await z('/contractors/nearby?postal=31-500');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.origin.place, 'Kraków');
+  assert.equal(r.body.radiusKm, 50);
+  const names = r.body.results.map((c: any) => c.name);
+  assert.ok(names.includes('Schody Wieliczka'));
+  assert.ok(!names.includes('Schody Gdańsk'), 'Gdańsk jest daleko poza 50 km');
+  const ds = r.body.results.map((c: any) => c.distanceKm);
+  assert.deepEqual(ds, [...ds].sort((a: number, b: number) => a - b), 'najbliżsi pierwsi');
+  assert.ok(r.body.results.every((c: any) => !('email' in c) && !('phone' in c)), 'bez kontaktu w odpowiedzi publicznej');
+  const w = r.body.results.find((c: any) => c.name === 'Schody Wieliczka');
+  assert.equal(w.servesArea, w.distanceKm <= 20);
+  assert.equal((await z('/contractors/nearby?postal=12')).status, 400);
+  // nazwa „Imię I.” gdy brak nazwy firmy
+  const adam = r.body.results.find((c: any) => c.name.startsWith('Adam'));
+  assert.equal(adam?.name, 'Adam D.');
+
+  // zapytanie do wybranych: obcy (spoza promienia) identyfikator jest pomijany
+  const gd = get(`SELECT id FROM studio_contractors WHERE email = 'gdansk@schody.pl'`)!.id;
+  const q = await owner(`/projects/${projectId}/quote-request`, { method: 'POST', body: { name: 'Ola', email: 'ola@example.pl', postalCode: '31-500', consent: true, contractorIds: [w.id, gd] } });
+  assert.equal(q.status, 201);
+  assert.equal(q.body.selected, 1);
+  const saved = get(`SELECT COUNT(*) n FROM studio_quote_request_contractors WHERE request_id = ?`, q.body.id)!.n;
+  assert.equal(saved, 1);
+});

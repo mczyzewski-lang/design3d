@@ -74,6 +74,10 @@ await o.waitForTimeout(400);
 // ---- krok 2: znajdź wykonawcę z okolicy ----
 await o.click('[data-testid="find-contractor"]');
 await o.fill('[data-testid="quote-postal"]', '30061');
+await o.click('[data-testid="quote-search"]');
+await o.waitForSelector('[data-testid="nearby-results"]');
+const rows = await o.locator('[data-testid="nearby-row"]').count();
+ok(/Kraków/.test(await o.textContent('[data-testid="nearby-results"]')), `tabela wykonawców w promieniu 50 km od 30-061 (Kraków), wierszy: ${rows}`);
 await o.fill('[data-testid="quote-name"]', 'Anna');
 await o.fill('[data-testid="quote-email"]', 'anna@example.pl');
 await o.click('[data-testid="quote-submit"]');
@@ -82,7 +86,7 @@ ok(/zgod/i.test(await o.textContent('[data-testid="quote-errors"]')), '„Znajd�
 await o.check('[data-testid="quote-consent"]');
 await o.click('[data-testid="quote-submit"]');
 await o.waitForSelector('[data-testid="quote-done"]');
-ok(true, '„Znajdź wykonawcę” — zgłoszenie z kodem pocztowym przyjęte');
+ok(true, '„Znajdź wykonawców” — zapytanie do wybranych przyjęte');
 await o.click('[data-testid="quote-done"] button');
 
 // karta właściciela nie renderuje sceny w tle podczas kroków firmy (programowy render w CI jest wolny)
@@ -112,6 +116,7 @@ await f.check('[data-testid="gate-leads"]');
 await f.fill('[data-testid="gate-postalCode"]', '30061');
 ok((await f.inputValue('[data-testid="gate-postalCode"]')) === '30-061', 'kod pocztowy formatowany 00-000');
 await f.fill('[data-testid="gate-radiusKm"]', '40');
+await f.fill('[data-testid="gate-companyName"]', 'Stolarstwo Schodowe Jan Stolarz');
 await f.screenshot({ path: `${out}/4-rejestracja.png` });
 await f.click('[data-testid="gate-submit"]');
 await f.waitForSelector('[data-testid="gate-errors"]');

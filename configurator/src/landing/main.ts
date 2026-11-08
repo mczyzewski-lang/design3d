@@ -29,7 +29,7 @@ if (form) {
     const f = new FormData(form);
     const body = {
       firstName: String(f.get('firstName') ?? ''), lastName: String(f.get('lastName') ?? ''),
-      email: String(f.get('email') ?? ''), phone: String(f.get('phone') ?? ''),
+      email: String(f.get('email') ?? ''), phone: String(f.get('phone') ?? ''), companyName: String(f.get('companyName') ?? ''),
       postalCode: String(f.get('postalCode') ?? ''), radiusKm: String(f.get('radiusKm') ?? ''),
       leads: f.get('leads') === 'on', source: firstTouchSource() === 'direct' ? 'landing' : `landing:${firstTouchSource()}`.slice(0, 60),
     };

@@ -42,6 +42,11 @@ function chart(series) {
     <text x="${pad}" y="12">max ${fmt(max)}</text></svg>`;
 }
 
+function contractorList(list, empty) {
+  if (!list.length) return `<span class="badge warn">${esc(empty)}</span>`;
+  return `<div class="matches">${list.map((m) => `<span class="small"><b>${esc(m.company_name || `${m.first_name} ${m.last_name}`)}</b> · ${esc(m.distanceKm)} km · <a href="mailto:${esc(m.email)}">${esc(m.email)}</a> · <a href="tel:${esc(m.phone)}">${esc(m.phone)}</a></span>`).join('')}</div>`;
+}
+
 function render(s) {
   const t = s.totals, p = s.period, f = s.funnel;
   $('#view').innerHTML = `
@@ -84,15 +89,16 @@ function render(s) {
     </div>
 
     <div class="card">
-      <h2>Zgłoszenia „Znajdź wykonawcę” <span class="muted small">— dopasowanie przybliżone: ten sam obszar kodu pocztowego (2 pierwsze cyfry)</span></h2>
+      <h2>Zgłoszenia „Znajdź wykonawcę” <span class="muted small">— wybrani przez inwestora i pozostali wykonawcy w promieniu (odległość od kodu pocztowego)</span></h2>
       ${s.quoteRequests.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Data</th><th>Projekt</th><th>Inwestor</th><th>Kod / promień</th><th>Wykonawcy w obszarze</th><th>Status</th></tr></thead>
+        <thead><tr><th>Data</th><th>Projekt</th><th>Inwestor</th><th>Kod / promień</th><th>Wybrani przez inwestora</th><th>Inni w promieniu</th><th>Status</th></tr></thead>
         <tbody>${s.quoteRequests.map((q) => `<tr>
           <td class="small">${date(q.created_at)}</td>
           <td>${q.share_token ? `<a href="/konfigurator/p/${esc(q.share_token)}" target="_blank" rel="noopener">${esc(q.project_name)}</a>` : esc(q.project_name)}</td>
           <td>${esc(q.name)}<div class="small muted">${q.email ? `<a href="mailto:${esc(q.email)}">${esc(q.email)}</a>` : ''} ${q.phone ? `<a href="tel:${esc(q.phone)}">${esc(q.phone)}</a>` : ''}</div></td>
-          <td class="mono">${esc(q.postal_code)} · ${esc(q.radius_km)} km</td>
-          <td>${q.matches.length ? `<div class="matches">${q.matches.map((m) => `<span class="small">${esc(m.first_name)} ${esc(m.last_name)} · <span class="mono">${esc(m.postal_code)}</span> (${esc(m.radius_km)} km) · <a href="mailto:${esc(m.email)}">${esc(m.email)}</a></span>`).join('')}</div>` : '<span class="badge warn">brak w obszarze</span>'}</td>
+          <td><span class="mono">${esc(q.postal_code)}</span> · ${esc(q.radius_km)} km<div class="small muted">${esc(q.place ?? '')}</div></td>
+          <td>${contractorList(q.selected, 'nikt nie wybrany')}</td>
+          <td>${contractorList(q.matches, 'brak w promieniu')}</td>
           <td><select data-qid="${q.id}">${['new', 'sent', 'closed'].map((st) => `<option value="${st}" ${q.status === st ? 'selected' : ''}>${{ new: 'nowe', sent: 'przekazane', closed: 'zamknięte' }[st]}</option>`).join('')}</select></td>
         </tr>`).join('')}</tbody></table></div>` : '<div class="empty">Brak zgłoszeń.</div>'}
     </div>
@@ -103,11 +109,11 @@ function render(s) {
         <thead><tr><th>Data</th><th>Wykonawca</th><th>Kontakt</th><th>Skąd</th><th>Przez projekt</th><th>Zapytania z okolicy</th><th class="num">Projekty</th></tr></thead>
         <tbody>${s.recentContractors.map((c) => `<tr>
           <td class="small">${date(c.created_at)}</td>
-          <td>${esc(c.first_name)} ${esc(c.last_name)}</td>
+          <td>${esc(c.first_name)} ${esc(c.last_name)}${c.company_name ? `<div class="small muted">${esc(c.company_name)}</div>` : ''}</td>
           <td class="small"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a><br><a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></td>
           <td><span class="badge ${c.source === 'share_link' ? 'accent' : c.source?.startsWith('landing') ? 'ok' : ''}">${esc(c.source === 'share_link' ? c.channel : srcLabel(c.source))}</span></td>
           <td class="small">${esc(c.project_name ?? '—')}</td>
-          <td>${c.leads_opt_in ? `<span class="badge ok">tak</span> <span class="mono">${esc(c.postal_code)}</span> · ${esc(c.radius_km)} km` : '<span class="muted small">nie</span>'}</td>
+          <td>${c.leads_opt_in ? `<span class="badge ok">tak</span>${c.listed ? ' <span class="badge accent" title="widoczny w wyszukiwarce">w wyszukiwarce</span>' : ''} <span class="mono">${esc(c.postal_code)}</span> · ${esc(c.radius_km)} km` : '<span class="muted small">nie</span>'}</td>
           <td class="num">${fmt(c.projects)}</td>
         </tr>`).join('')}</tbody></table></div>` : '<div class="empty">Jeszcze nikt nie dołączył.</div>'}
     </div>

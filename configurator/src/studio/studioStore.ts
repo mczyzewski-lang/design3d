@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { mergeWithDefaults } from '../engine/defaults';
 import type { Config, Vec3 } from '../engine/types';
 import { useStore } from '../store/store';
-import { api, type CommentDto, type ContractorDto, type ContractorForm, type ProjectListItem, type VersionInfo } from './api';
+import { api, type CommentDto, type ContractorDto, type ContractorForm, type ProjectListItem, type QuoteForm, type VersionInfo } from './api';
 import { capture } from '../three/capture';
 import { firstTouchSource, shareVia } from '../analytics';
 
@@ -59,7 +59,7 @@ interface StudioState {
   ownerLink: () => Promise<string | null>;
   register: (form: ContractorForm) => Promise<string[] | null>;
   /** „Znajdź wykonawcę”: zapisuje i udostępnia projekt, potem zgłasza go z kodem pocztowym. */
-  requestQuotes: (form: { name: string; email: string; phone: string; postalCode: string; radiusKm: string; consent: boolean }) => Promise<{ errors: string[] } | { nearby: number }>;
+  requestQuotes: (form: QuoteForm) => Promise<{ errors: string[] } | { nearby: number; selected: number }>;
   continueAsOwner: () => Promise<boolean>;
   loadComments: () => Promise<void>;
   addComment: (text: string, pos: Vec3 | null) => Promise<boolean>;
@@ -234,7 +234,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       const id = get().projectId;
       if (!url || !id) return { errors: [get().error ?? 'Nie udało się zapisać projektu'] };
       const r = await api.quoteRequest(id, form);
-      return { nearby: r.nearby };
+      return { nearby: r.nearby, selected: r.selected };
     } catch (e) {
       const err = e as { errors?: string[]; message: string };
       return { errors: err.errors ?? [err.message] };

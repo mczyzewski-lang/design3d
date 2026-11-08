@@ -6,7 +6,10 @@ export interface ProjectDto { id: string; name: string; currentVersion: number; 
 export interface ContractorDto { first_name: string; last_name: string; email: string; phone: string; first_at: string; last_at: string }
 export interface CommentDto { id: number; version: number; author_role: 'owner' | 'contractor'; author_name: string; text: string; pos: Vec3 | null; resolved: boolean; created_at: string }
 export interface ShareDto { projectId?: string; name: string; config: Config; currentVersion: number; role: 'owner' | 'contractor' | 'none'; viewer: { name: string } | null; consentText: string; leadsText: string; thumbnail: string | null }
-export interface ContractorForm { firstName: string; lastName: string; email: string; phone: string; consent: boolean; leads: boolean; postalCode: string; radiusKm: string }
+export interface ContractorForm { firstName: string; lastName: string; companyName: string; email: string; phone: string; consent: boolean; leads: boolean; postalCode: string; radiusKm: string }
+export interface QuoteForm { name: string; email: string; phone: string; postalCode: string; radiusKm: string; consent: boolean; contractorIds: number[] }
+export interface NearbyContractor { id: number; name: string; place: string; distanceKm: number; radiusKm: number; servesArea: boolean }
+export interface NearbyDto { origin: { code: string; place: string; precision: 'exact' | 'near' | 'area' }; radiusKm: number; results: NearbyContractor[] }
 export interface ProjectListItem { id: string; name: string; current_version: number; updated_at: string }
 
 export class ApiError extends Error {
@@ -48,8 +51,9 @@ export const api = {
   registerContractor: (token: string, form: ContractorForm, via?: string) =>
     call<{ role: 'contractor'; viewer: { name: string } }>(`/shares/${token}/contractor`, 'POST', { ...form, via }),
   joinAsContractor: (form: Omit<ContractorForm, 'consent'> & { source?: string }) => call<{ ok: true }>('/contractors', 'POST', form),
-  quoteRequest: (id: string, form: { name: string; email: string; phone: string; postalCode: string; radiusKm: string; consent: boolean }) =>
-    call<{ ok: true; nearby: number }>(`/projects/${id}/quote-request`, 'POST', form),
+  quoteRequest: (id: string, form: QuoteForm) =>
+    call<{ ok: true; nearby: number; selected: number }>(`/projects/${id}/quote-request`, 'POST', form),
+  nearby: (postal: string, radius: number) => call<NearbyDto>(`/contractors/nearby?postal=${encodeURIComponent(postal)}&radius=${radius}`),
   me: () => call<{ owner: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string } }>('/me'),
   comments: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }) =>
     call<CommentDto[]>(ref.owner && ref.projectId ? `/projects/${ref.projectId}/comments` : `/shares/${ref.shareToken}/comments`),

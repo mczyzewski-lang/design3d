@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { all, exec, get, run, tx, nowIso, type Row } from '../db/index.ts';
+import { distanceKm, geocodePostal } from './geo/postal.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let schemaReady = false;
@@ -19,6 +20,7 @@ export function ensureStudioSchema(): void {
       ['leads_opt_in', 'INTEGER NOT NULL DEFAULT 0'], ['postal_code', 'TEXT'], ['radius_km', 'INTEGER'],
       ['leads_consent_text', 'TEXT'], ['leads_consent_at', 'TEXT'],
       ['source', 'TEXT'], ['via', 'TEXT'], ['ref_project_id', 'TEXT'],
+      ['company_name', 'TEXT'], ['listed', 'INTEGER NOT NULL DEFAULT 0'],
     ],
     studio_projects: [['source', 'TEXT']],
   };
@@ -33,7 +35,9 @@ export const CONSENT_TEXT =
   'Wyrażam zgodę na przetwarzanie moich danych (imię, nazwisko, e-mail, telefon) przez design3d.pl oraz ich przekazanie właścicielowi projektu w celu przygotowania wyceny schodów i kontaktu w tej sprawie. Zgodę mogę wycofać w każdej chwili.';
 
 /** Dobrowolna, osobna zgoda na zapytania o wyceny z okolicy (marketing). */
-export const LEADS_TEXT = 'Chcę bezpłatnie otrzymywać zapytania o wyceny schodów z mojej okolicy.';
+export const LEADS_TEXT = 'Chcę bezpłatnie otrzymywać zapytania o wyceny schodów z mojej okolicy i wyrażam zgodę na pokazywanie nazwy mojej firmy (lub imienia i inicjału nazwiska), miejscowości i zasięgu w wyszukiwarce wykonawców design3d.pl.';
+/** Promień wyszukiwania wykonawców przez inwestora (km). */
+export const SEARCH_RADIUS_KM = 50;
 const MAX_THUMB = 600_000; // bajtów po zdekodowaniu
 export const QUOTE_CONSENT_TEXT =
   'Wyrażam zgodę na przekazanie mojego projektu schodów oraz danych kontaktowych wykonawcom z mojej okolicy przez design3d.pl w celu przygotowania wyceny. Zgodę mogę wycofać w każdej chwili.';
@@ -140,6 +144,8 @@ const wrap = (fn: (req: Request, res: Response) => unknown) => (req: Request, re
 
 // prosty limit prób rejestracji (per IP)
 const hits = new Map<string, number[]>();
+/** Tylko testy: wyczyść liczniki limitów (wszystkie żądania testowe mają ten sam adres IP). */
+export function resetRateLimits(): void { hits.clear(); }
 function rateLimited(req: Request, max = 10, windowMs = 10 * 60_000): boolean {
   const ip = req.ip ?? 'x';
   const now = Date.now();
@@ -147,6 +153,24 @@ function rateLimited(req: Request, max = 10, windowMs = 10 * 60_000): boolean {
   list.push(now);
   hits.set(ip, list);
   return list.length > max;
+}
+
+/** Widoczni w wyszukiwarce wykonawcy w promieniu od punktu, najbliżsi pierwsi. */
+export function nearbyContractors(origin: { lat: number; lon: number }, radiusKm: number, includeUnlisted = false): Array<{ id: number; name: string; place: string; distanceKm: number; radiusKm: number; servesArea: boolean }> {
+  const rows = all(`SELECT id, first_name, last_name, company_name, postal_code, radius_km FROM studio_contractors WHERE leads_opt_in = 1 ${includeUnlisted ? '' : 'AND listed = 1'}`);
+  const out = [];
+  for (const c of rows) {
+    const g = geocodePostal(c.postal_code);
+    if (!g) continue;
+    const d = Math.round(distanceKm(origin, g) * 10) / 10;
+    if (d > radiusKm) continue;
+    out.push({
+      id: c.id as number,
+      name: (c.company_name as string) || `${c.first_name} ${String(c.last_name).slice(0, 1)}.`,
+      place: g.place, distanceKm: d, radiusKm: c.radius_km as number, servesArea: d <= (c.radius_km as number),
+    });
+  }
+  return out.sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
 export function studioRouter(): express.Router {
@@ -361,6 +385,7 @@ export function studioRouter(): express.Router {
     const b = req.body ?? {};
     const first = cleanName(b.firstName, 60);
     const last = cleanName(b.lastName, 80);
+    const company = cleanName(b.companyName, 120) || null;
     const email = String(b.email ?? '').trim().toLowerCase().slice(0, 160);
     const phone = String(b.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20);
     const errors: string[] = [];
@@ -373,13 +398,14 @@ export function studioRouter(): express.Router {
     const postal = normPostal(b.postalCode);
     const radius = Math.round(Number(b.radiusKm));
     if (leads && !postal) errors.push('Podaj kod pocztowy w formacie 00-000');
+    else if (leads && !geocodePostal(postal)) errors.push('Nie rozpoznajemy tego kodu pocztowego');
     if (leads && !(radius >= 5 && radius <= 300)) errors.push('Podaj promień od 5 do 300 km');
     if (!origin.consentRequired && !leads) errors.push('Zaznacz zgodę na otrzymywanie zapytań z okolicy');
     if (errors.length) { res.status(400).json({ error: errors.join('. '), errors }); return null; }
     // zgoda na zapytania z okolicy: zapis z treścią i datą; odznaczenie przy ponownej rejestracji ją wycofuje
     const setLeads = (id: number) => run(
-      `UPDATE studio_contractors SET leads_opt_in = ?, postal_code = ?, radius_km = ?, leads_consent_text = ?, leads_consent_at = ? WHERE id = ?`,
-      leads ? 1 : 0, leads ? postal : null, leads ? radius : null, leads ? LEADS_TEXT : null, leads ? nowIso() : null, id,
+      `UPDATE studio_contractors SET leads_opt_in = ?, listed = ?, postal_code = ?, radius_km = ?, leads_consent_text = ?, leads_consent_at = ?, company_name = COALESCE(?, company_name) WHERE id = ?`,
+      leads ? 1 : 0, leads ? 1 : 0, leads ? postal : null, leads ? radius : null, leads ? LEADS_TEXT : null, leads ? nowIso() : null, company, id,
     );
     const consentText = origin.consentRequired ? CONSENT_TEXT : LEADS_TEXT;
     const contractorId = tx(() => {
@@ -431,7 +457,19 @@ export function studioRouter(): express.Router {
     res.status(204).end();
   });
 
-  /** „Znajdź wykonawcę”: właściciel zostawia kod pocztowy i kontakt — dopasowanie w panelu admina. */
+  /**
+   * Wykonawcy w promieniu od kodu pocztowego inwestora (najbliżsi pierwsi) — tylko firmy, które zgodziły się
+   * na pokazywanie w wyszukiwarce. Bez danych kontaktowych: zapytanie idzie przez design3d.pl.
+   */
+  r.get('/contractors/nearby', (req, res) => {
+    if (rateLimited(req, 60, 10 * 60_000)) return res.status(429).json({ error: 'Zbyt wiele wyszukiwań — spróbuj za kilka minut' });
+    const origin = geocodePostal(req.query.postal);
+    if (!origin) return res.status(400).json({ error: 'Podaj poprawny kod pocztowy (00-000)' });
+    const radius = Math.min(150, Math.max(10, Math.round(Number(req.query.radius) || SEARCH_RADIUS_KM)));
+    res.json({ origin: { code: origin.code, place: origin.place, precision: origin.precision }, radiusKm: radius, results: nearbyContractors(origin, radius) });
+  });
+
+  /** „Znajdź wykonawcę”: właściciel zostawia kod pocztowy, kontakt i (opcjonalnie) wybranych wykonawców z tabeli. */
   r.post('/projects/:id/quote-request', wrap((req, res) => {
     const id = ownerOnly(req, res);
     if (!id) return;
@@ -440,20 +478,29 @@ export function studioRouter(): express.Router {
     const email = String(b.email ?? '').trim().toLowerCase().slice(0, 160);
     const phone = String(b.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20);
     const postal = normPostal(b.postalCode);
-    const radius = Math.round(Number(b.radiusKm ?? 30));
+    const radius = Math.round(Number(b.radiusKm ?? SEARCH_RADIUS_KM));
     const errors: string[] = [];
     if (!name) errors.push('Podaj imię');
     if (!postal) errors.push('Podaj kod pocztowy w formacie 00-000');
+    const origin = postal ? geocodePostal(postal) : null;
+    if (postal && !origin) errors.push('Nie rozpoznajemy tego kodu pocztowego');
     if (!(radius >= 5 && radius <= 300)) errors.push('Podaj promień od 5 do 300 km');
     const okEmail = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email);
     const okPhone = phone.replace(/\D/g, '').length >= 9;
     if (!okEmail && !okPhone) errors.push('Podaj e-mail lub telefon, abyśmy mogli przekazać wyceny');
     if (b.consent !== true) errors.push('Zaznacz zgodę na przekazanie projektu wykonawcom');
     if (errors.length) return res.status(400).json({ error: errors.join('. '), errors });
-    run(`INSERT INTO studio_quote_requests (project_id, name, email, phone, postal_code, radius_km, consent_text, consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      id, name, okEmail ? email : null, okPhone ? phone : null, postal, radius, QUOTE_CONSENT_TEXT, nowIso());
-    const nearby = get(`SELECT COUNT(*) AS n FROM studio_contractors WHERE leads_opt_in = 1 AND substr(postal_code, 1, 2) = ?`, postal.slice(0, 2))!.n as number;
-    res.status(201).json({ ok: true, nearby });
+    // wybrani z tabeli: tylko widoczni w wyszukiwarce i w promieniu wyszukiwania
+    const found = nearbyContractors(origin!, Math.max(radius, SEARCH_RADIUS_KM));
+    const wanted = new Set((Array.isArray(b.contractorIds) ? b.contractorIds : []).slice(0, 30).map(Number));
+    const chosen = found.filter((c) => wanted.has(c.id));
+    const reqId = tx(() => {
+      const rid = Number(run(`INSERT INTO studio_quote_requests (project_id, name, email, phone, postal_code, radius_km, consent_text, consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, name, okEmail ? email : null, okPhone ? phone : null, postal, radius, QUOTE_CONSENT_TEXT, nowIso()).lastInsertRowid);
+      for (const c of chosen) run(`INSERT INTO studio_quote_request_contractors (request_id, contractor_id, distance_km) VALUES (?, ?, ?)`, rid, c.id, c.distanceKm);
+      return rid;
+    });
+    res.status(201).json({ ok: true, id: reqId, nearby: found.length, selected: chosen.length });
   }));
 
   r.get('/shares/:token/comments', (req, res) => {

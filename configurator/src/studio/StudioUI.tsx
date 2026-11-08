@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, Copy, HardHat, House, KeyRound, Lock, Mail, MessageCirclePlus, MessageSquare, Save, Send, Share2, X } from 'lucide-react';
 import { useConfig } from '../store/store';
 import { isDirty, useStudio } from './studioStore';
-import { api } from './api';
+import { api, type NearbyDto } from './api';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -12,10 +12,13 @@ function Modal({ open, onClose, children, width = 'max-w-md' }: { open: boolean;
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
-          <motion.div className={`w-full ${width} rounded-2xl bg-white p-5 shadow-2xl`} initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }} onMouseDown={(e) => e.stopPropagation()}>
-            {children}
-          </motion.div>
+        <motion.div className="fixed inset-0 z-50 overflow-y-auto bg-black/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
+          {/* przewijane, gdy okno jest wyższe niż ekran (telefon) */}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <motion.div className={`w-full ${width} rounded-2xl bg-white p-5 shadow-2xl`} initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }} onMouseDown={(e) => e.stopPropagation()}>
+              {children}
+            </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -264,7 +267,7 @@ export function ShareGate() {
   const register = useStudio((s) => s.register);
   const continueAsOwner = useStudio((s) => s.continueAsOwner);
   const [who, setWho] = useState<'pick' | 'owner' | 'contractor'>('pick');
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', consent: false, leads: false, postalCode: '', radiusKm: '30' });
+  const [form, setForm] = useState({ firstName: '', lastName: '', companyName: '', email: '', phone: '', consent: false, leads: false, postalCode: '', radiusKm: '30' });
   const [thumbOk, setThumbOk] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -328,6 +331,11 @@ export function ShareGate() {
             </label>
             {form.leads && (
               <div className="grid grid-cols-2 gap-2.5 rounded-xl bg-paper p-2.5">
+                <label className="col-span-2 block">
+                  <span className="text-[11.5px] text-muted">Nazwa firmy (pokazywana inwestorom)</span>
+                  <input data-testid="gate-companyName" autoComplete="organization" maxLength={120} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+                    className="mt-0.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13.5px] outline-none focus:border-oak" />
+                </label>
                 <label className="block">
                   <span className="text-[11.5px] text-muted">Kod pocztowy</span>
                   <input data-testid="gate-postalCode" required inputMode="numeric" autoComplete="postal-code" placeholder="00-000" maxLength={6} value={form.postalCode}
@@ -354,7 +362,7 @@ export function ShareGate() {
   );
 }
 
-// ---------------- krok 2: znajdź wykonawcę z okolicy ----------------
+// ---------------- krok 2: znajdź wykonawców z okolicy (tabela) ----------------
 
 export function FindContractorCard() {
   const role = useStudio((s) => s.role);
@@ -365,83 +373,159 @@ export function FindContractorCard() {
       <div className="mx-3 mb-3 flex items-center gap-3 rounded-2xl border border-oak/40 bg-oak-soft/40 px-4 py-3" data-testid="find-contractor-card">
         <div className="min-w-0 flex-1">
           <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-oak">Krok 2 · bezpłatnie</div>
-          <div className="text-[13px] font-medium leading-tight">Znajdź wykonawcę z okolicy</div>
+          <div className="text-[13px] font-medium leading-tight">Porównaj wyceny wykonawców z okolicy</div>
         </div>
-        <button type="button" data-testid="find-contractor" onClick={() => setOpen(true)} className="shrink-0 rounded-full bg-ink px-3.5 py-2 text-[12px] font-medium text-white hover:bg-ink/85">Znajdź wykonawcę</button>
+        <button type="button" data-testid="find-contractor" onClick={() => setOpen(true)} className="shrink-0 rounded-full bg-ink px-3.5 py-2 text-[12px] font-medium text-white hover:bg-ink/85">Znajdź wykonawców</button>
       </div>
       <FindContractorDialog open={open} onClose={() => setOpen(false)} />
     </>
   );
 }
 
+const fmtPostal = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 5); return d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d; };
+
 export function FindContractorDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const requestQuotes = useStudio((s) => s.requestQuotes);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', postalCode: '', radiusKm: '30', consent: false });
+  const [postal, setPostal] = useState('');
+  const [radius, setRadius] = useState(50);
+  const [search, setSearch] = useState<null | NearbyDto>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [contact, setContact] = useState({ name: '', email: '', phone: '', consent: false });
   const [consentText, setConsentText] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<null | { nearby: number }>(null);
+  const [done, setDone] = useState<null | { selected: number }>(null);
   useEffect(() => {
     if (!open) return;
     setDone(null); setErrors([]);
     if (!consentText) void api.me().then((m) => setConsentText(m.texts.quote)).catch(() => {});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const runSearch = async (e?: React.FormEvent, r = radius) => {
+    e?.preventDefault();
+    setSearching(true); setSearchErr(null);
+    try {
+      const res = await api.nearby(postal, r);
+      setSearch(res);
+      // domyślnie zaznaczeni ci, którzy deklarują dojazd w Twój rejon
+      setPicked(new Set(res.results.filter((c) => c.servesArea).map((c) => c.id)));
+    } catch (err) {
+      setSearch(null); setSearchErr((err as Error).message);
+    } finally {
+      setSearching(false);
+    }
+  };
+  const toggle = (id: number) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const results = search?.results ?? [];
+  const allOn = results.length > 0 && results.every((c) => picked.has(c.id));
   const input = 'mt-0.5 w-full rounded-lg border border-line px-3 py-2 text-[13.5px] outline-none focus:border-oak';
+
   return (
-    <Modal open={open} onClose={onClose}>
-      <div className="flex items-start justify-between">
+    <Modal open={open} onClose={onClose} width="max-w-2xl">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[15px] font-semibold">Znajdź wykonawcę z okolicy</div>
-          <div className="text-[12px] text-muted">Bezpłatnie. Przekażemy Twój projekt firmom schodowym działającym w pobliżu — odezwą się z wyceną.</div>
+          <div className="text-[15px] font-semibold">Znajdź wykonawców w okolicy</div>
+          <div className="text-[12px] text-muted">Bezpłatnie i bez zobowiązań. Pokażemy firmy schodowe w promieniu {radius} km od Twojej inwestycji — najbliższe na górze.</div>
         </div>
         <button type="button" onClick={onClose} className="text-muted hover:text-ink"><X size={18} /></button>
       </div>
+
       {done ? (
         <div className="mt-4 rounded-xl bg-ok-soft p-3 text-[13px]" data-testid="quote-done">
-          <div className="font-medium">Dziękujemy! Zgłoszenie przyjęte.</div>
+          <div className="font-medium">Dziękujemy! Zapytanie przyjęte.</div>
           <div className="mt-1 text-ink/75">
-            {done.nearby > 0
-              ? `W naszej bazie są wykonawcy z Twojego obszaru (${done.nearby}). Przekażemy im projekt — wyceny trafią na podany kontakt.`
-              : 'Szukamy wykonawców w Twojej okolicy — przekażemy projekt, gdy tylko ich dopasujemy, i odezwiemy się na podany kontakt.'}
+            {done.selected > 0
+              ? `Przekażemy Twój projekt wybranym wykonawcom (${done.selected}) — odezwą się z wyceną na podany kontakt.`
+              : 'Poszukamy dla Ciebie wykonawców z okolicy i przekażemy im projekt — odezwiemy się na podany kontakt.'}
           </div>
           <button type="button" onClick={onClose} className="mt-3 rounded-lg bg-ink px-3 py-1.5 text-[12.5px] text-white">Zamknij</button>
         </div>
       ) : (
-        <form className="mt-4 grid gap-2.5" onSubmit={async (e) => {
-          e.preventDefault(); setBusy(true);
-          const r = await requestQuotes(form); setBusy(false);
-          if ('errors' in r) setErrors(r.errors); else setDone(r);
-        }}>
-          <div className="grid grid-cols-2 gap-2.5">
-            <label className="block"><span className="text-[11.5px] text-muted">Kod pocztowy inwestycji</span>
-              <input data-testid="quote-postal" required inputMode="numeric" autoComplete="postal-code" placeholder="00-000" maxLength={6} value={form.postalCode}
-                onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setForm({ ...form, postalCode: d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d }); }} className={input} />
+        <>
+          <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={runSearch}>
+            <label className="block min-w-[130px] flex-1"><span className="text-[11.5px] text-muted">Kod pocztowy inwestycji</span>
+              <input data-testid="quote-postal" required inputMode="numeric" autoComplete="postal-code" placeholder="00-000" maxLength={6} value={postal} onChange={(e) => setPostal(fmtPostal(e.target.value))} className={input} />
             </label>
-            <label className="block"><span className="text-[11.5px] text-muted">Szukaj w promieniu (km)</span>
-              <input data-testid="quote-radius" type="number" min={5} max={300} step={5} value={form.radiusKm} onChange={(e) => setForm({ ...form, radiusKm: e.target.value })} className={input} />
+            <label className="block w-28"><span className="text-[11.5px] text-muted">Promień</span>
+              <select data-testid="quote-radius" value={radius} onChange={(e) => { const r = Number(e.target.value); setRadius(r); if (search) void runSearch(undefined, r); }} className={input}>
+                {[25, 50, 100].map((r) => <option key={r} value={r}>{r} km</option>)}
+              </select>
             </label>
-          </div>
-          <label className="block"><span className="text-[11.5px] text-muted">Imię</span>
-            <input data-testid="quote-name" required autoComplete="given-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={input} />
-          </label>
-          <div className="grid grid-cols-2 gap-2.5">
-            <label className="block"><span className="text-[11.5px] text-muted">E-mail</span>
-              <input data-testid="quote-email" type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} />
-            </label>
-            <label className="block"><span className="text-[11.5px] text-muted">Telefon</span>
-              <input data-testid="quote-phone" type="tel" autoComplete="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} />
-            </label>
-          </div>
-          <p className="-mt-1 text-[11px] text-muted">Wystarczy e-mail albo telefon.</p>
-          <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
-            <input data-testid="quote-consent" type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5" />
-            <span>{consentText || 'Wyrażam zgodę na przekazanie projektu i kontaktu wykonawcom z mojej okolicy.'}</span>
-          </label>
-          {errors.length > 0 && <div className="rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad" data-testid="quote-errors">{errors.join('. ')}</div>}
-          <button type="submit" data-testid="quote-submit" disabled={busy} className="mt-1 rounded-2xl bg-ink py-3 text-[14px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
-            {busy ? 'Wysyłanie…' : 'Znajdź wykonawcę'}
-          </button>
-        </form>
+            <button type="submit" data-testid="quote-search" disabled={searching || postal.length < 6} className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white disabled:opacity-50">{searching ? 'Szukam…' : 'Szukaj'}</button>
+          </form>
+          {searchErr && <div className="mt-2 rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad">{searchErr}</div>}
+
+          {search && (
+            <div className="mt-4" data-testid="nearby-results">
+              <div className="text-[12.5px] text-ink/80">
+                Okolice: <b>{search.origin.place}</b> ({search.origin.code}){search.origin.precision === 'area' && <span className="text-muted"> — lokalizacja przybliżona (obszar kodu)</span>} · {results.length
+                  ? <>znaleziono <b>{results.length}</b> {results.length === 1 ? 'wykonawcę' : 'wykonawców'} w promieniu {search.radiusKm} km</>
+                  : <>brak wykonawców w promieniu {search.radiusKm} km</>}
+              </div>
+              {results.length > 0 ? (
+                <div className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-line scrollbar-thin">
+                  <table className="w-full text-left text-[12.5px]" data-testid="nearby-table">
+                    <thead className="sticky top-0 bg-paper text-[11px] uppercase tracking-[0.06em] text-muted">
+                      <tr>
+                        <th className="w-8 px-3 py-2"><input type="checkbox" aria-label="Zaznacz wszystkich" checked={allOn} onChange={() => setPicked(allOn ? new Set() : new Set(results.map((c) => c.id)))} /></th>
+                        <th className="px-2 py-2 font-semibold">Wykonawca</th>
+                        <th className="px-2 py-2 text-right font-semibold">Odległość</th>
+                        <th className="hidden px-3 py-2 font-semibold sm:table-cell">Zasięg działania</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.map((c) => (
+                        <tr key={c.id} onClick={() => toggle(c.id)} className={`cursor-pointer border-t border-line ${picked.has(c.id) ? 'bg-oak-soft/40' : 'hover:bg-paper'}`} data-testid="nearby-row">
+                          <td className="px-3 py-2"><input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)} onClick={(e) => e.stopPropagation()} aria-label={`Wybierz: ${c.name}`} /></td>
+                          <td className="px-2 py-2"><div className="font-medium">{c.name}</div><div className="text-[11.5px] text-muted">{c.place}</div></td>
+                          <td className="px-2 py-2 text-right tabular-nums">{c.distanceKm.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} km</td>
+                          <td className="hidden px-3 py-2 sm:table-cell">
+                            {c.servesArea
+                              ? <span className="rounded-full bg-ok-soft px-2 py-0.5 text-[11px] text-ok">dojeżdża do Ciebie</span>
+                              : <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[11px] text-warn">zasięg {c.radiusKm} km</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="mt-2 rounded-xl bg-paper p-3 text-[12.5px] text-ink/75">Nie mamy jeszcze wykonawców w tej okolicy. Zostaw kontakt — poszukamy firm dla Ciebie i przekażemy im projekt.</p>
+              )}
+
+              <form className="mt-4 grid gap-2.5" onSubmit={async (e) => {
+                e.preventDefault(); setBusy(true);
+                const r = await requestQuotes({ ...contact, postalCode: postal, radiusKm: String(radius), contractorIds: [...picked] });
+                setBusy(false);
+                if ('errors' in r) setErrors(r.errors); else setDone({ selected: r.selected });
+              }}>
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                  <label className="block"><span className="text-[11.5px] text-muted">Imię</span>
+                    <input data-testid="quote-name" required autoComplete="given-name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} className={input} />
+                  </label>
+                  <label className="block"><span className="text-[11.5px] text-muted">E-mail</span>
+                    <input data-testid="quote-email" type="email" autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} className={input} />
+                  </label>
+                  <label className="block"><span className="text-[11.5px] text-muted">Telefon</span>
+                    <input data-testid="quote-phone" type="tel" autoComplete="tel" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} className={input} />
+                  </label>
+                </div>
+                <p className="-mt-1 text-[11px] text-muted">Wystarczy e-mail albo telefon. Dane kontaktowe wykonawców nie są publiczne — zapytanie przekazujemy my.</p>
+                <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
+                  <input data-testid="quote-consent" type="checkbox" checked={contact.consent} onChange={(e) => setContact({ ...contact, consent: e.target.checked })} className="mt-0.5" />
+                  <span>{consentText || 'Wyrażam zgodę na przekazanie projektu i kontaktu wykonawcom z mojej okolicy.'}</span>
+                </label>
+                {errors.length > 0 && <div className="rounded-lg bg-bad-soft px-3 py-2 text-[12px] text-bad" data-testid="quote-errors">{errors.join('. ')}</div>}
+                <button type="submit" data-testid="quote-submit" disabled={busy} className="rounded-2xl bg-ink py-3 text-[14px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
+                  {busy ? 'Wysyłanie…' : picked.size > 0 ? `Poproś o wycenę (${picked.size} ${picked.size === 1 ? 'wykonawca' : 'wykonawców'})` : 'Zostaw zgłoszenie'}
+                </button>
+              </form>
+            </div>
+          )}
+          <p className="mt-3 text-[10.5px] text-muted">Odległości liczone od kodów pocztowych (lokalizacje: © GeoNames, CC BY 4.0).</p>
+        </>
       )}
     </Modal>
   );
