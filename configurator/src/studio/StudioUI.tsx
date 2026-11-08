@@ -7,6 +7,9 @@ import { useConfig } from '../store/store';
 import { isDirty, useStudio } from './studioStore';
 import { api, type NearbyDto } from './api';
 import { ConsentText } from './Consent';
+import { PhoneField, phoneValid } from './PhoneField';
+import { PhoneLogin } from './PhoneLogin';
+import { Elapsed } from './Elapsed';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -73,6 +76,8 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
     return () => document.removeEventListener('mousedown', h);
   }, []);
   useEffect(() => { if (st.error) { toast(st.error); st.clearError(); } }, [st.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  // „Moje projekty” na innym urządzeniu: logowanie numerem i kodem SMS (także z linku ?login=1 z landingu)
+  const [loginOpen, setLoginOpen] = useState(() => new URLSearchParams(location.search).has('login'));
   // firma w projekcie z panelu: bez „Zapisz kopię” — wycenę wysyła czerwony pasek „Wyceń i wyślij”
   if (st.role === 'none' || st.role === 'contractor') return null;
   const owner = st.role === 'owner';
@@ -122,6 +127,7 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
                   <KeyRound size={14} /> Link właściciela (inne urządzenie)
                 </Item>
               )}
+              {!st.phone && <Item testId="owner-login" onClick={() => { setMenu(false); setLoginOpen(true); }}><KeyRound size={14} /> Moje projekty — zaloguj się numerem</Item>}
               {st.myProjects.length > 0 && <Hdr>Moje projekty{st.phone ? ` · ${fmtPhone(st.phone)}` : ''}</Hdr>}
               {st.myProjects.slice(0, 8).map((p) => (
                 <Item key={p.id} active={p.id === st.projectId} onClick={() => { setMenu(false); void st.openProject(p.id).then(() => toast(`Otwarto: ${p.name}`)); }}>
@@ -134,6 +140,13 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
         </AnimatePresence>
       </div>
       {<SaveShareDialog open={st.shareOpen} onClose={() => st.setShareOpen(false)} toast={toast} />}
+      <Modal open={loginOpen} onClose={() => setLoginOpen(false)}>
+        <div className="mb-3 flex items-start justify-between">
+          <div><div className="text-[15px] font-semibold">Moje projekty</div><div className="text-[12px] text-muted">Zaloguj się numerem telefonu — wyślemy kod SMS.</div></div>
+          <button type="button" onClick={() => setLoginOpen(false)} className="text-muted hover:text-ink" aria-label="Zamknij"><X size={18} /></button>
+        </div>
+        <PhoneLogin role="owner" compact onDone={() => { setLoginOpen(false); void st.loadMe(); void st.refreshProjects().then(() => { setMenu(true); }); toast('Zalogowano — Twoje projekty są w menu'); }} />
+      </Modal>
     </div>
   );
 }
@@ -226,14 +239,11 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
               <form className="grid grid-cols-1 gap-2" onSubmit={send}>
                 <input data-testid="person-name" required autoFocus autoComplete="name" placeholder="Imię i nazwisko" value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
                 <div className="flex gap-2">
-                  <div className="flex min-w-0 flex-1 items-center rounded-lg border border-line focus-within:border-oak">
-                    <span className="pl-3 text-[14px] text-muted">+48</span>
-                    <input data-testid="phone-input" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="600 100 200" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} className="min-w-0 flex-1 bg-transparent px-2 py-2 text-[14px] outline-none" />
-                  </div>
-                  <button type="submit" data-testid="phone-send" disabled={busy || phoneInput.replace(/\D/g, '').length < 9 || !consent || fullName.trim().split(/\s+/).length < 2} className="shrink-0 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? 'Wysyłanie…' : 'Wyślij kod SMS'}</button>
+                  <PhoneField value={phoneInput} onChange={setPhoneInput} testId="phone-input" className="flex-1" />
+                  <button type="submit" data-testid="phone-send" disabled={busy || !phoneValid(phoneInput) || !consent || fullName.trim().split(/\s+/).length < 2} className="shrink-0 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? 'Wysyłanie…' : 'Wyślij kod SMS'}</button>
                 </div>
                 {/* zgoda pojawia się po wpisaniu numeru */}
-                {phoneInput.replace(/\D/g, '').length >= 9 && (
+                {phoneValid(phoneInput) && (
                   <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
                     <input data-testid="phone-consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" />
                     <ConsentText testId="phone-consent-text" text={phoneConsentText || 'Wyrażam zgodę na przetwarzanie moich danych (imię, nazwisko, numer telefonu) przez design3d.pl w celu zapisania projektu i kontaktu w sprawie wyceny.'} />
@@ -407,9 +417,10 @@ export function ShareGate() {
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [ownerMsg, setOwnerMsg] = useState<string | null>(null);
+  const [gateLogin, setGateLogin] = useState(false);
   if (!gate) return null;
   const thumb = gate.thumb && thumbOk ? gate.thumb : null;
-  const field = (k: 'fullName' | 'email' | 'phone', label: string, type = 'text', auto = '') => (
+  const field = (k: 'fullName' | 'email', label: string, type = 'text', auto = '') => (
     <label className="block">
       <span className="text-[11.5px] text-muted">{label}</span>
       <input data-testid={`gate-${k}`} required type={type} autoComplete={auto} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} className="mt-0.5 w-full rounded-lg border border-line px-3 py-2 text-[13.5px] outline-none focus:border-oak" />
@@ -455,7 +466,7 @@ export function ShareGate() {
           <form className="mt-4 grid gap-2.5" onSubmit={async (e) => { e.preventDefault(); setBusy(true); const r = await register(form); setBusy(false); setErrors(r ?? []); }}>
             {field('fullName', 'Imię i nazwisko', 'text', 'name')}
             {field('email', 'E-mail', 'email', 'email')}
-            {field('phone', 'Telefon', 'tel', 'tel')}
+            <div className="block"><span className="text-[11.5px] text-muted">Telefon</span><PhoneField value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} testId="gate-phone" className="mt-0.5" /></div>
             <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
               <input data-testid="gate-consent" type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5" />
               <ConsentText testId="gate-consent-text" text={gate.consentText} />
@@ -490,6 +501,12 @@ export function ShareGate() {
             </button>
             <button type="button" onClick={() => setWho('pick')} className="text-[12px] text-muted underline">Wróć</button>
           </form>
+        )}
+        {who === 'contractor' && (
+          <div className="mt-3 border-t border-line pt-3 text-center text-[12.5px] text-muted">
+            {!gateLogin ? <>Masz już konto wykonawcy? <button type="button" data-testid="gate-login" onClick={() => setGateLogin(true)} className="font-medium text-ink underline">Zaloguj się numerem telefonu</button></>
+              : <div className="text-left"><PhoneLogin role="contractor" compact onDone={() => location.reload()} /></div>}
+          </div>
         )}
       </motion.div>
       </div>
@@ -526,7 +543,7 @@ export function FindContractorDialog({ open, onClose, initialPostal }: { open: b
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const myPhone = useStudio((s) => s.phone);
   const [contact, setContact] = useState({ name: '', email: '', phone: '', consent: false });
-  useEffect(() => { if (myPhone && !contact.phone) setContact((c) => ({ ...c, phone: fmtPhone(myPhone) })); }, [myPhone]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (myPhone && !contact.phone) setContact((c) => ({ ...c, phone: myPhone })); }, [myPhone]); // eslint-disable-line react-hooks/exhaustive-deps
   const [consentText, setConsentText] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -646,9 +663,8 @@ export function FindContractorDialog({ open, onClose, initialPostal }: { open: b
                   <label className="block"><span className="text-[11.5px] text-muted">E-mail</span>
                     <input data-testid="quote-email" type="email" autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} className={input} />
                   </label>
-                  <label className="block"><span className="text-[11.5px] text-muted">Telefon</span>
-                    <input data-testid="quote-phone" type="tel" autoComplete="tel" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} className={input} />
-                  </label>
+                  <div className="block"><span className="text-[11.5px] text-muted">Telefon</span>
+                  <PhoneField value={contact.phone} onChange={(v) => setContact({ ...contact, phone: v })} testId="quote-phone" className="mt-0.5" /></div>
                 </div>
                 <p className="-mt-1 text-[11px] text-muted">Wystarczy e-mail albo telefon. Dane kontaktowe wykonawców nie są publiczne — zapytanie przekazujemy my.</p>
                 <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
@@ -726,6 +742,14 @@ const SPEED_SRC = 'Harvard Business Review, 2011';
 
 function ContractorCta({ variant }: { variant: 'panel' | 'mobile' }) {
   const [open, setOpen] = useState(false);
+  // czas od zgłoszenia tego projektu (z panelu) — liczony na żywo z sekundami, dopóki wycena nie jest wysłana
+  const projectId = useStudio((s) => s.projectId);
+  const [received, setReceived] = useState<string | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    void api.crmOverview().then((o) => { const q = o.quotes.find((x) => x.projectId === projectId); setReceived(q && (q.status === 'new' || q.status === 'in_progress') ? q.receivedAt : null); }).catch(() => {});
+  }, [projectId, open]);
+  const timer = received ? <><Elapsed since={received} className="font-semibold" /> · </> : null;
   const button = (
     <button type="button" data-testid={variant === 'panel' ? 'cta-quote' : 'cta-quote-mobile'} onClick={() => setOpen(true)}
       className="w-full rounded-full bg-[#d92d20] px-4 py-3 text-[14px] font-semibold text-white shadow-[0_6px_18px_-6px_rgba(217,45,32,0.6)] hover:bg-[#b42318]">
@@ -734,11 +758,11 @@ function ContractorCta({ variant }: { variant: 'panel' | 'mobile' }) {
   );
   const tip = variant === 'panel' ? (
     <p className="mt-1.5 text-[11px] leading-snug text-muted" data-testid="speed-tip">
-      <b className="text-ink">Wyceń w ciągu 24 h.</b> {SPEED_TIP} <span className="whitespace-nowrap">({SPEED_SRC})</span>.
+      {timer}<b className="text-ink">Wyceń w ciągu 24 h.</b> {SPEED_TIP} <span className="whitespace-nowrap">({SPEED_SRC})</span>.
     </p>
   ) : (
     <p className="mt-1 text-center text-[11px] leading-snug text-muted" data-testid="speed-tip">
-      <b className="text-ink">Wyceń w 24 h</b> · szybki kontakt = do 60× większa szansa (HBR)
+      {timer}<b className="text-ink">Wyceń w 24 h</b>{received ? '' : ' · szybki kontakt = do 60× większa szansa (HBR)'}
     </p>
   );
   return (

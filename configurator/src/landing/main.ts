@@ -51,7 +51,7 @@ if (form) {
     const f = new FormData(form);
     const body = {
       fullName: String(f.get('fullName') ?? ''),
-      email: String(f.get('email') ?? ''), phone: String(f.get('phone') ?? ''), companyName: String(f.get('companyName') ?? ''),
+      email: String(f.get('email') ?? ''), phone: joinPhone(String(f.get('prefix') ?? '+48'), String(f.get('phone') ?? '')), companyName: String(f.get('companyName') ?? ''),
       postalCode: String(f.get('postalCode') ?? ''), radiusKm: String(f.get('radiusKm') ?? ''),
       leads: f.get('leads') === 'on', source: firstTouchSource() === 'direct' ? 'landing' : `landing:${firstTouchSource()}`.slice(0, 60),
     };
@@ -75,4 +75,11 @@ if (form) {
       btn.disabled = false;
     }
   });
+}
+
+/** Prefiks z listy + numer krajowy → „+48600100200” (numer wpisany już z „+” zostaje bez zmian). */
+function joinPhone(prefix: string, national: string): string {
+  const n = national.trim();
+  if (n.startsWith('+') || n.startsWith('00')) return n;
+  return `${prefix}${n.replace(/\D/g, '')}`;
 }

@@ -74,6 +74,9 @@ export const api = {
   crmViewed: (projectId: string) => call<{ ok: true }>(`/contractor/quotes/${projectId}/viewed`, 'POST'),
   me: () => call<{ owner: boolean; phone: string | null; person: { firstName: string; lastName: string } | null; smsTest: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string; phone: string } }>('/me'),
   phoneStart: (form: { phone: string; fullName: string; consent: boolean }) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/phone/start', 'POST', form),
+  loginStart: (role: 'contractor' | 'owner', phone: string) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/login/start', 'POST', { role, phone }),
+  loginVerify: (role: 'contractor' | 'owner', phone: string, code: string) => call<{ ok: true; role: string; claimed?: number; name?: string }>('/login/verify', 'POST', { role, phone, code }),
+  logout: () => call<{ ok: true }>('/logout', 'POST'),
   phoneVerify: (phone: string, code: string) => call<{ ok: true; phone: string; claimed: number }>('/phone/verify', 'POST', { phone, code }),
   comments: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }) =>
     call<CommentDto[]>(ref.owner && ref.projectId ? `/projects/${ref.projectId}/comments` : `/shares/${ref.shareToken}/comments`),

@@ -24,7 +24,7 @@ export function ensureStudioSchema(): void {
       ['company_name', 'TEXT'], ['listed', 'INTEGER NOT NULL DEFAULT 0'], ['notifications_seen_at', 'TEXT'],
     ],
     studio_projects: [['source', 'TEXT'], ['owner_phone', 'TEXT']],
-    studio_otp: [['first_name', 'TEXT'], ['last_name', 'TEXT']],
+    studio_otp: [['first_name', 'TEXT'], ['last_name', 'TEXT'], ['purpose', 'TEXT']],
     studio_phones: [['first_name', 'TEXT'], ['last_name', 'TEXT'], ['consent_text', 'TEXT'], ['consent_at', 'TEXT']],
   };
   for (const [table, list] of Object.entries(migrate)) {
@@ -86,13 +86,21 @@ function ownerKey(req: Request, res: Response, create: boolean): string | null {
   }
   return k ?? null;
 }
-/** „+48 600 100 200”, „600100200”, „0048…” → „+48600100200”; niepoprawny → null. */
+/**
+ * „+48 600 100 200”, „600100200”, „0048…” → „+48600100200”; numery zagraniczne w formacie E.164 („+49 151 …”, „+420 …”).
+ * Polski numer musi mieć 9 cyfr; niepoprawny → null.
+ */
 export function normPhone(v: unknown): string | null {
   let d = String(v ?? '').replace(/[^\d+]/g, '');
   if (d.startsWith('00')) d = `+${d.slice(2)}`;
   if (/^\d{9}$/.test(d)) d = `+48${d}`;
   if (/^48\d{9}$/.test(d)) d = `+${d}`;
-  return /^\+48\d{9}$/.test(d) ? d : null;
+  if (d.startsWith('+48')) return /^\+48\d{9}$/.test(d) ? d : null;
+  return /^\+[1-9]\d{7,14}$/.test(d) ? d : null;
+}
+/** Firma po numerze telefonu (numery zapisane różnie: „609000333”, „+48 609…”). */
+function contractorByPhone(phone: string): Row | null {
+  return all(`SELECT * FROM studio_contractors WHERE phone IS NOT NULL ORDER BY id DESC`).find((c) => normPhone(c.phone) === phone) ?? null;
 }
 function phoneAccount(req: Request): Row | null {
   const p = phoneOf(req);
@@ -367,7 +375,7 @@ export function studioRouter(): express.Router {
     const { first, last } = personName(req.body ?? {});
     const errors: string[] = [];
     if (!first || !last) errors.push('Podaj imię i nazwisko');
-    if (!phone) errors.push('Podaj polski numer telefonu (9 cyfr)');
+    if (!phone) errors.push('Podaj poprawny numer telefonu');
     if (req.body?.consent !== true) errors.push('Zaznacz zgodę na przetwarzanie danych');
     if (errors.length || !phone) return res.status(400).json({ error: errors.join('. '), errors });
     if (rateLimited(req, 6, 10 * 60_000, 'phone')) return res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' });
@@ -388,7 +396,7 @@ export function studioRouter(): express.Router {
     const code = String(req.body?.code ?? '').replace(/\D/g, '');
     const key = cookies(req)[OWNER_COOKIE];
     if (!phone || !key || code.length !== 6) return res.status(400).json({ error: 'Wpisz 6-cyfrowy kod z SMS' });
-    const otp = get(`SELECT * FROM studio_otp WHERE phone = ? AND owner_key_hash = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1`, phone, sha(key));
+    const otp = get(`SELECT * FROM studio_otp WHERE phone = ? AND owner_key_hash = ? AND purpose IS NULL AND used_at IS NULL ORDER BY id DESC LIMIT 1`, phone, sha(key));
     if (!otp || otp.expires_at < nowIso()) return res.status(400).json({ error: 'Kod wygasł — wyślij nowy' });
     if (otp.attempts >= 5) return res.status(429).json({ error: 'Zbyt wiele błędnych prób — wyślij nowy kod' });
     if (otp.code_hash !== sha(`${phone}:${code}`)) {
@@ -408,6 +416,74 @@ export function studioRouter(): express.Router {
     });
     res.json({ ok: true, phone, claimed });
   }));
+
+  // ---------- logowanie numerem telefonu i kodem SMS (wykonawca → panel, klient → jego projekty) ----------
+  const LOGIN_ROLES = new Set(['contractor', 'owner']);
+  r.post('/login/start', wrap(async (req, res) => {
+    const role = String(req.body?.role ?? '');
+    const phone = normPhone(req.body?.phone);
+    if (!LOGIN_ROLES.has(role)) return res.status(400).json({ error: 'Nieznany rodzaj konta' });
+    if (!phone) return res.status(400).json({ error: 'Podaj poprawny numer telefonu' });
+    if (rateLimited(req, 6, 10 * 60_000, 'phone')) return res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' });
+    const known = role === 'contractor'
+      ? !!contractorByPhone(phone)
+      : !!get(`SELECT 1 FROM studio_phones WHERE phone = ?`, phone) || !!get(`SELECT 1 FROM studio_projects WHERE owner_phone = ?`, phone);
+    if (!known) {
+      return res.status(404).json({ error: role === 'contractor'
+        ? 'Nie znamy tego numeru — dołącz jako wykonawca albo zaloguj się numerem podanym przy rejestracji'
+        : 'Brak projektów przypisanych do tego numeru — zapisz projekt przyciskiem „Zapisz i udostępnij”' });
+    }
+    const recent = get(`SELECT COUNT(*) n FROM studio_otp WHERE phone = ? AND created_at > ?`, phone, new Date(Date.now() - 10 * 60_000).toISOString())!.n as number;
+    if (recent >= 3) return res.status(429).json({ error: 'Wysłaliśmy już kilka kodów na ten numer — spróbuj za 10 minut' });
+    // klient: kod wiązany z kluczem tej przeglądarki; wykonawca: z rolą (sesja powstaje dopiero po kodzie)
+    const bind = role === 'owner' ? sha(ownerKey(req, res, true)!) : 'login:contractor';
+    const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+    run(`INSERT INTO studio_otp (phone, owner_key_hash, code_hash, expires_at, purpose) VALUES (?, ?, ?, ?, ?)`, phone, bind, sha(`${phone}:${code}`), new Date(Date.now() + 10 * 60_000).toISOString(), `login:${role}`);
+    const sms = await sendSms(phone, `Kod logowania design3d: ${code}. Nie przekazuj go nikomu.`);
+    if (!sms.sent && !sms.demo) return res.status(502).json({ error: 'Nie udało się wysłać SMS — spróbuj ponownie za chwilę' });
+    res.json({ ok: true, phone, test: sms.demo, ...(sms.demo ? { testCode: code } : {}) });
+  }));
+
+  r.post('/login/verify', wrap((req, res) => {
+    const role = String(req.body?.role ?? '');
+    const phone = normPhone(req.body?.phone);
+    const code = String(req.body?.code ?? '').replace(/\D/g, '');
+    if (!LOGIN_ROLES.has(role) || !phone || code.length !== 6) return res.status(400).json({ error: 'Wpisz 6-cyfrowy kod z SMS' });
+    const key = role === 'owner' ? cookies(req)[OWNER_COOKIE] : null;
+    if (role === 'owner' && !key) return res.status(400).json({ error: 'Kod wygasł — wyślij nowy' });
+    const bind = role === 'owner' ? sha(key!) : 'login:contractor';
+    const otp = get(`SELECT * FROM studio_otp WHERE phone = ? AND owner_key_hash = ? AND purpose = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1`, phone, bind, `login:${role}`);
+    if (!otp || otp.expires_at < nowIso()) return res.status(400).json({ error: 'Kod wygasł — wyślij nowy' });
+    if (otp.attempts >= 5) return res.status(429).json({ error: 'Zbyt wiele błędnych prób — wyślij nowy kod' });
+    if (otp.code_hash !== sha(`${phone}:${code}`)) {
+      run(`UPDATE studio_otp SET attempts = attempts + 1 WHERE id = ?`, otp.id);
+      return res.status(400).json({ error: 'Nieprawidłowy kod' });
+    }
+    run(`UPDATE studio_otp SET used_at = ? WHERE id = ?`, nowIso(), otp.id);
+    if (role === 'contractor') {
+      const c = contractorByPhone(phone);
+      if (!c) return res.status(404).json({ error: 'Nie znamy tego numeru' });
+      const t = token(24);
+      run(`INSERT INTO studio_sessions (token_hash, contractor_id, expires_at) VALUES (?, ?, ?)`, sha(t), c.id, new Date(Date.now() + 90 * 86400_000).toISOString());
+      setCookie(req, res, SESSION_COOKIE, t, 90 * 86400_000);
+      return res.json({ ok: true, role, name: c.company_name || `${c.first_name} ${c.last_name}` });
+    }
+    const k = sha(key!);
+    const claimed = tx(() => {
+      run(`INSERT INTO studio_phones (phone, verified_at, method) VALUES (?, ?, ?) ON CONFLICT(phone) DO UPDATE SET verified_at = excluded.verified_at`, phone, nowIso(), smsConfigured() ? 'sms' : 'test');
+      run(`INSERT INTO studio_owner_phones (owner_key_hash, phone, verified_at) VALUES (?, ?, ?) ON CONFLICT(owner_key_hash) DO UPDATE SET phone = excluded.phone, verified_at = excluded.verified_at`, k, phone, nowIso());
+      return run(`INSERT OR IGNORE INTO studio_project_owners (project_id, owner_key_hash) SELECT id, ? FROM studio_projects WHERE owner_phone = ?`, k, phone).changes;
+    });
+    res.json({ ok: true, role, claimed });
+  }));
+
+  /** Wylogowanie wykonawcy (sesja panelu). */
+  r.post('/logout', (req, res) => {
+    const t = cookies(req)[SESSION_COOKIE];
+    if (t) run(`DELETE FROM studio_sessions WHERE token_hash = ?`, sha(t));
+    setCookie(req, res, SESSION_COOKIE, '', 0);
+    res.json({ ok: true });
+  });
 
   /** Podgląd projektu (zrzut sceny JPEG/PNG/WebP) — pokazywany w bramce udostępnionego linku. */
   r.put('/projects/:id/thumbnail', wrap((req, res) => {
@@ -526,7 +602,8 @@ export function studioRouter(): express.Router {
     const { first, last } = personName(b);
     const company = cleanName(b.companyName, 120) || null;
     const email = String(b.email ?? '').trim().toLowerCase().slice(0, 160);
-    const phone = String(b.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20);
+    const rawPhone = String(b.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20);
+    const phone = normPhone(rawPhone) ?? rawPhone;
     const errors: string[] = [];
     if (!first || !last) errors.push('Podaj imię i nazwisko');
     if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) errors.push('Podaj poprawny e-mail');
@@ -644,7 +721,8 @@ export function studioRouter(): express.Router {
     if (!c) return;
     const b = req.body ?? {};
     const company = cleanName(b.companyName, 120) || null;
-    const phone = String(b.phone ?? c.phone).replace(/[^\d+]/g, '').slice(0, 20);
+    const rawPhone = String(b.phone ?? c.phone).replace(/[^\d+]/g, '').slice(0, 20);
+    const phone = normPhone(rawPhone) ?? rawPhone;
     const leads = b.leads === true;
     const postal = normPostal(b.postalCode);
     const radius = Math.round(Number(b.radiusKm));

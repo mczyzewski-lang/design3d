@@ -1,10 +1,13 @@
 // Panel wykonawcy (CRM): wyceny z projektów, kontakty inwestorów, umowy, kalendarz, skrzynka e-mail, profil firmy.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Bell, Box, CalendarDays, ChevronRight, Columns3, Eye, List, MessageSquare, FileSignature, Inbox, Lock, Mail, Phone, Plus, Settings, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, Bell, Box, Check, CalendarDays, ChevronRight, Columns3, Eye, List, MessageSquare, FileSignature, Inbox, Lock, Mail, Phone, Plus, Settings, Sparkles, Users } from 'lucide-react';
 import { api, type CrmContact, type CrmHistoryItem, type CrmNotification, type CrmOverview, type CrmQuote, type QuoteStatus } from './api';
 import { useStudio } from './studioStore';
 import { ConsentText } from './Consent';
+import { PhoneField } from './PhoneField';
+import { PhoneLogin } from './PhoneLogin';
+import { Elapsed } from './Elapsed';
 import { DemoActivity, DemoBanner, DemoCalendar, DemoContracts, DemoEmail, DemoLink } from './CrmDemo';
 
 type Tab = 'quotes' | 'contacts' | 'contracts' | 'activity' | 'calendar' | 'email' | 'profile';
@@ -67,7 +70,7 @@ export function CrmShell() {
       </header>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/* telefon: dolne menu jak w aplikacji mobilnej; desktop: menu boczne */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:z-auto md:flex md:w-56 md:shrink-0 md:flex-col md:gap-1 md:border-r md:border-t-0 md:bg-panel md:px-3 md:py-4 md:pb-4 md:backdrop-blur-none" aria-label="Sekcje panelu" data-testid="crm-nav">
+        <nav className={`${data ? '' : '!hidden'} fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:z-auto md:flex md:w-56 md:shrink-0 md:flex-col md:gap-1 md:border-r md:border-t-0 md:bg-panel md:px-3 md:py-4 md:pb-4 md:backdrop-blur-none`} aria-label="Sekcje panelu" data-testid="crm-nav">
           {TABS.map((t) => {
             const active = tab === t.key;
             return (
@@ -85,7 +88,13 @@ export function CrmShell() {
           })}
         </nav>
         <main className="min-h-0 flex-1 overflow-y-auto px-3 pb-24 pt-4 sm:px-6 sm:pt-6 md:pb-6">
-          {error && <div className="mx-auto max-w-xl rounded-2xl border border-line bg-white p-6 text-center" data-testid="crm-error"><Lock className="mx-auto text-muted" /><p className="mt-2 text-[14px]">{error}</p><a href="/#dla-wykonawcow" className="mt-3 inline-block rounded-full bg-ink px-4 py-2 text-[13px] text-white">Dołącz jako wykonawca</a></div>}
+          {error && (
+            <div className="mx-auto max-w-md rounded-2xl border border-line bg-white p-6" data-testid="crm-error">
+              <div className="text-center"><Lock className="mx-auto text-muted" /><h1 className="mt-2 text-[17px] font-semibold">Zaloguj się do panelu wykonawcy</h1><p className="mt-1 text-[13px] text-muted">Wpisz numer telefonu firmy — wyślemy kod SMS.</p></div>
+              <div className="mt-4"><PhoneLogin role="contractor" compact onDone={() => { setError(null); void load(); }} /></div>
+              <p className="mt-4 border-t border-line pt-3 text-center text-[12.5px] text-muted">Nie masz konta? <a href="/#dla-wykonawcow" className="font-medium text-ink underline">Dołącz jako wykonawca</a></p>
+            </div>
+          )}
           {!data && !error && <p className="text-[13px] text-muted">Wczytywanie…</p>}
           {data && tab === 'quotes' && <Quotes data={data} highlight={highlight} reload={load} />}
           {data && tab === 'contacts' && <Contacts data={data} reload={load} />}
@@ -125,9 +134,28 @@ function ProjectButton({ q, compact = false }: { q: CrmQuote; compact?: boolean 
   return (
     <button type="button" data-testid="crm-open-project-quick" disabled={!q.token} onClick={(e) => { e.stopPropagation(); openProject(q); }}
       title="Otwórz projekt 3D i wymiary"
-      className={`flex shrink-0 items-center gap-1.5 rounded-full border border-ink/15 bg-white font-medium text-ink hover:border-ink/40 disabled:opacity-40 ${compact ? 'px-2.5 py-1 text-[11.5px]' : 'px-3 py-1.5 text-[12px]'}`}>
-      <Eye size={compact ? 13 : 14} />Projekt 3D
+      className={`flex shrink-0 items-center gap-1.5 rounded-full bg-ink font-semibold text-white shadow-[0_4px_12px_-4px_rgba(20,19,17,0.45)] hover:bg-ink/85 disabled:opacity-40 ${compact ? 'px-3 py-1.5 text-[12px]' : 'px-4 py-2 text-[13px]'}`}>
+      <Box size={compact ? 14 : 15} />Projekt 3D
     </button>
+  );
+}
+
+/** Pasek etapów jak w umowach: Nowa → W przygotowaniu → Wysłana → Wygrana (przegrana — szary pasek). */
+const PIPE: Array<[QuoteStatus, string]> = [['new', 'Nowa'], ['in_progress', 'Przygotowanie'], ['sent', 'Wysłana'], ['won', 'Wygrana']];
+function StageBar({ status }: { status: QuoteStatus }) {
+  const lost = status === 'lost';
+  const idx = lost ? 2 : PIPE.findIndex(([k]) => k === status);
+  return (
+    <ol className="grid grid-cols-4 gap-1" data-testid="crm-stage-bar" aria-label={`Etap: ${STATUS[status].label}`}>
+      {PIPE.map(([k, label], i) => (
+        <li key={k} className="min-w-0">
+          <div className={`h-1.5 rounded-full ${i <= idx ? (lost ? 'bg-muted/40' : status === 'won' ? 'bg-ok' : 'bg-oak') : 'bg-line'}`} />
+          <div className={`mt-1 flex items-center gap-0.5 truncate text-[10.5px] ${i === idx ? 'font-semibold text-ink' : i < idx ? 'text-ink/70' : 'text-muted'}`}>
+            {i < idx || (i === idx && status === 'won') ? <Check size={11} className="shrink-0" /> : null}{lost && i === 3 ? <span className="text-bad">Przegrana</span> : label}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -144,19 +172,20 @@ function Quotes({ data, highlight, reload }: { data: CrmOverview; highlight: str
   return (
     <div className={view === 'pipeline' ? '' : 'mx-auto max-w-3xl'}>
       <H title="Wyceny">
-        <div className="flex rounded-full border border-line bg-white p-0.5" role="tablist" aria-label="Widok">
-          <button type="button" data-testid="crm-view-list" onClick={() => changeView('list')} aria-pressed={view === 'list'} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] ${view === 'list' ? 'bg-ink text-white' : 'text-ink/70'}`}><List size={14} />Lista</button>
-          <button type="button" data-testid="crm-view-pipeline" onClick={() => changeView('pipeline')} aria-pressed={view === 'pipeline'} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] ${view === 'pipeline' ? 'bg-ink text-white' : 'text-ink/70'}`}><Columns3 size={14} />Pipeline</button>
+        <div className="flex items-center gap-0.5 text-muted" role="group" aria-label="Widok">
+          <button type="button" data-testid="crm-view-list" onClick={() => changeView('list')} aria-pressed={view === 'list'} title="Lista" aria-label="Lista" className={`rounded-md p-1.5 ${view === 'list' ? 'bg-black/[0.06] text-ink' : 'hover:text-ink'}`}><List size={16} /></button>
+          <button type="button" data-testid="crm-view-pipeline" onClick={() => changeView('pipeline')} aria-pressed={view === 'pipeline'} title="Pipeline" aria-label="Pipeline" className={`rounded-md p-1.5 ${view === 'pipeline' ? 'bg-black/[0.06] text-ink' : 'hover:text-ink'}`}><Columns3 size={16} /></button>
         </div>
-        <a href="/konfigurator/?from=crm" data-testid="crm-new-quote" className="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-[12.5px] font-medium text-white hover:bg-ink/85"><Plus size={15} />Nowa wycena</a>
+        {/* „Nowa wycena” dopiero po otwarciu pierwszego projektu — wcześniej skupiamy na otrzymanych zapytaniach */}
+        {data.quotes.some((q) => !q.isNew) && <a href="/konfigurator/?from=crm" data-testid="crm-new-quote" className="flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1.5 text-[12px] font-medium text-ink/80 hover:border-ink/30 hover:text-ink"><Plus size={14} />Nowa wycena</a>}
       </H>
       {view === 'list' && (
-        <div className="choices -mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0" data-testid="crm-stage-filter">
+        <div className="choices -mx-3 -mt-2 mb-3 flex gap-3.5 overflow-x-auto border-b border-line px-3 sm:mx-0 sm:px-0" data-testid="crm-stage-filter">
           {(['all', ...STAGES] as const).map((s) => (
             <button key={s} type="button" data-testid={`crm-stage-${s}`} onClick={() => setStage(s)} aria-pressed={stage === s}
-              className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] ${stage === s ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink/80'}`}>
+              className={`-mb-px flex shrink-0 items-center gap-1 border-b-2 py-1.5 text-[12px] ${stage === s ? 'border-ink/70 text-ink' : 'border-transparent text-muted hover:text-ink/80'}`}>
               {s === 'all' ? 'Wszystkie' : STAGE_PLURAL[s]}
-              <span className={`rounded-full px-1.5 text-[10.5px] tabular-nums ${stage === s ? 'bg-white/20' : 'bg-paper text-muted'}`}>{s === 'all' ? data.quotes.length : counts[s]}</span>
+              <span className="text-[10.5px] tabular-nums opacity-70">{s === 'all' ? data.quotes.length : counts[s]}</span>
             </button>
           ))}
         </div>
@@ -200,6 +229,7 @@ function Pipeline({ quotes, reload, total }: { quotes: CrmQuote[]; reload: () =>
                     {q.isNew && <span className="rounded-full bg-[#2f6fd6] px-1.5 text-[9.5px] font-semibold uppercase text-white">Nowe</span>}
                   </div>
                   <div className="mt-0.5 truncate text-[11.5px] text-muted">{q.owner.name}</div>
+                  {(q.status === 'new' || q.status === 'in_progress') && <Elapsed since={q.receivedAt} label="" className="mt-1 text-[11px]" />}
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-[12.5px] font-medium tabular-nums">{fmtPLN(q.amount)}</span>
                     <span className="flex-1" />
@@ -246,19 +276,19 @@ function QuoteCard({ q, open, onToggle, reload }: { q: CrmQuote; open: boolean; 
           <div className="truncate text-[12.5px] text-muted">{q.owner.name} · otrzymano {fmtDate(q.receivedAt)}</div>
         </div>
         <div className="hidden text-right sm:block">
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS[q.status].cls}`}>{STATUS[q.status].label}</span>
-          <div className="mt-0.5 text-[12.5px] tabular-nums text-ink/80">{fmtPLN(q.amount)}</div>
+          <div className="text-[13px] font-semibold tabular-nums text-ink/85">{fmtPLN(q.amount)}</div>
         </div>
         <ChevronRight size={18} className={`shrink-0 text-muted transition ${open ? 'rotate-90' : ''}`} />
       </button>
-      {!open && (
-        <div className="-mt-1 flex items-center gap-2 px-4 pb-3 pl-[68px]">
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium sm:hidden ${STATUS[q.status].cls}`}>{STATUS[q.status].label}</span>
-          <span className="text-[12px] tabular-nums text-ink/70 sm:hidden">{q.amount !== null ? fmtPLN(q.amount) : ''}</span>
+      <div className="-mt-1 grid gap-2.5 px-4 pb-3.5 sm:pl-[68px]">
+        <StageBar status={q.status} />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {(q.status === 'new' || q.status === 'in_progress') && <Elapsed since={q.receivedAt} className="text-[12px] font-medium" />}
+          <span className="text-[12.5px] font-medium tabular-nums text-ink/80 sm:hidden">{q.amount !== null ? fmtPLN(q.amount) : ''}</span>
           <span className="flex-1" />
-          <ProjectButton q={q} compact />
+          {!open && <ProjectButton q={q} />}
         </div>
-      )}
+      </div>
       {open && (
         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="border-t border-line bg-paper/50 px-4 py-4">
           <div className="grid gap-4 sm:grid-cols-[1fr_1.2fr]">
@@ -487,7 +517,7 @@ function Profile({ data, reload }: { data: CrmOverview; reload: () => Promise<vo
           <label className="text-[12px] text-muted">Imię i nazwisko<input value={`${me.firstName} ${me.lastName}`} disabled className={`${input} bg-paper text-muted`} /></label>
           <label className="text-[12px] text-muted">E-mail<input value={me.email} disabled className={`${input} bg-paper text-muted`} /></label>
         </div>
-        <label className="text-[12px] text-muted">Telefon<input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={input} /></label>
+        <div className="text-[12px] text-muted">Telefon (logowanie kodem SMS)<PhoneField value={f.phone} onChange={(v) => setF({ ...f, phone: v })} className="mt-0.5" /></div>
         <label className="flex items-start gap-2 text-[12px] leading-snug text-ink/80"><input type="checkbox" checked={f.leads} onChange={(e) => setF({ ...f, leads: e.target.checked })} className="mt-0.5" /><ConsentText text={data.leadsText} /></label>
         {f.leads && (
           <div className="grid grid-cols-2 gap-3">
@@ -495,7 +525,8 @@ function Profile({ data, reload }: { data: CrmOverview; reload: () => Promise<vo
             <label className="text-[12px] text-muted">Promień działania (km)<input type="number" min={5} max={300} value={f.radiusKm} onChange={(e) => setF({ ...f, radiusKm: e.target.value })} className={input} /></label>
           </div>
         )}
-        <div className="flex items-center gap-3"><button type="submit" className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white">Zapisz</button>{msg && <span className="text-[12px] text-muted">{msg}</span>}</div>
+        <div className="flex items-center gap-3"><button type="submit" className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white">Zapisz</button>{msg && <span className="text-[12px] text-muted">{msg}</span>}
+          <button type="button" data-testid="crm-logout" onClick={async () => { await api.logout().catch(() => {}); location.href = '/konfigurator/firma'; }} className="ml-auto text-[12.5px] text-muted underline-offset-2 hover:text-ink hover:underline">Wyloguj</button></div>
       </form>
       <div className="rounded-2xl border border-line bg-white p-5" data-testid="crm-logo">
         <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold">Logo firmy</h2><Pro /></div>

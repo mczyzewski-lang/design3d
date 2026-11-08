@@ -419,3 +419,43 @@ test('ogrodzenia: lista oczekujących (walidacja, zgoda, bez duplikatów) i wej�
   assert.equal(rows[0].detail, plan);
   assert.equal(rows[1].postal_code, '31-100');
 });
+
+test('logowanie kodem SMS: wykonawca do panelu, klient do swoich projektów; numery zagraniczne', async () => {
+  const { normPhone } = await import('../src/studio/routes.ts');
+  assert.equal(normPhone('600 100 200'), '+48600100200');
+  assert.equal(normPhone('+49 151 2345 6789'), '+4915123456789');
+  assert.equal(normPhone('00420 601 234 567'), '+420601234567');
+  assert.equal(normPhone('+48 600 100'), null);
+  assert.equal(normPhone('+12'), null);
+  // wykonawca zarejestrowany z numerem bez prefiksu
+  const reg = browser();
+  assert.equal((await reg('/contractors', { method: 'POST', body: { fullName: 'Ewa Płot', email: 'ewa@login.pl', phone: '607 111 222', postalCode: '31-100', radiusKm: 30, leads: true } })).status, 201);
+  const firm = browser();
+  assert.equal((await firm('/contractor/overview')).status, 401);
+  assert.equal((await firm('/login/start', { method: 'POST', body: { role: 'contractor', phone: '+48 600 000 001' } })).status, 404);
+  const s = await firm('/login/start', { method: 'POST', body: { role: 'contractor', phone: '+48607111222' } });
+  assert.equal(s.status, 200);
+  assert.equal((await firm('/login/verify', { method: 'POST', body: { role: 'contractor', phone: '607111222', code: '000000' } })).status, 400);
+  const v = await firm('/login/verify', { method: 'POST', body: { role: 'contractor', phone: '607111222', code: s.body.testCode } });
+  assert.equal(v.status, 200);
+  assert.equal((await firm('/contractor/overview')).status, 200);
+  await firm('/logout', { method: 'POST' });
+  assert.equal((await firm('/contractor/overview')).status, 401);
+  // klient: projekt przypisany do numeru na jednym urządzeniu, logowanie na drugim (numer niemiecki)
+  const a = browser();
+  const p = await a('/projects', { method: 'POST', body: { name: 'Dom Müller', config: { stairs: { shape: 'L' } } } });
+  const st = await a('/phone/start', { method: 'POST', body: { phone: '+49 151 2345 6789', fullName: 'Anna Müller', consent: true } });
+  assert.equal(st.status, 200);
+  assert.equal((await a('/phone/verify', { method: 'POST', body: { phone: '+4915123456789', code: st.body.testCode } })).status, 200);
+  const b = browser();
+  assert.equal((await b('/login/start', { method: 'POST', body: { role: 'owner', phone: '+48 600 000 002' } })).status, 404);
+  const bs = await b('/login/start', { method: 'POST', body: { role: 'owner', phone: '+4915123456789' } });
+  assert.equal(bs.status, 200);
+  // kodu logowania nie da się użyć w kroku „przypisz numer” i odwrotnie
+  assert.equal((await b('/phone/verify', { method: 'POST', body: { phone: '+4915123456789', code: bs.body.testCode } })).status, 400);
+  const bv = await b('/login/verify', { method: 'POST', body: { role: 'owner', phone: '+4915123456789', code: bs.body.testCode } });
+  assert.equal(bv.status, 200);
+  assert.equal(bv.body.claimed, 1);
+  assert.ok((await b('/projects')).body.some((x: any) => x.id === p.body.id));
+  assert.equal((await b('/me')).body.phone, '+4915123456789');
+});

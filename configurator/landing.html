@@ -30,7 +30,8 @@
           <a href="#dla-wykonawcow" class="hover:text-ink">Dla wykonawców</a>
           <a href="#faq" class="hover:text-ink">FAQ</a>
         </nav>
-        <a href="/konfigurator/?from=landing" data-cta="header" class="ml-auto rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/85">Otwórz konfigurator</a>
+        <a href="/konfigurator/?login=1" data-testid="owner-login-link" class="ml-auto hidden text-[12.5px] text-muted hover:text-ink sm:inline">Moje projekty</a>
+        <a href="/konfigurator/?from=landing" data-cta="header" class="ml-auto rounded-full sm:ml-0 bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/85">Otwórz konfigurator</a>
       </div>
     </header>
 
@@ -130,7 +131,14 @@
             <label class="block"><span class="lbl">Imię i nazwisko</span><input name="fullName" required autocomplete="name" class="inp" /></label>
             <label class="block"><span class="lbl">Nazwa firmy (pokazywana inwestorom)</span><input name="companyName" autocomplete="organization" maxlength="120" class="inp" /></label>
             <label class="block"><span class="lbl">E-mail</span><input name="email" type="email" required autocomplete="email" class="inp" /></label>
-            <label class="block"><span class="lbl">Telefon</span><input name="phone" type="tel" required autocomplete="tel" class="inp" /></label>
+            <label class="block"><span class="lbl">Telefon (logowanie kodem SMS)</span>
+              <span class="mt-0.5 flex items-stretch overflow-hidden rounded-[10px] border border-line bg-white focus-within:border-oak">
+                <select name="prefix" aria-label="Prefiks kraju" class="shrink-0 cursor-pointer border-r border-line bg-paper/60 px-2 text-[14px] outline-none">
+                  <option value="+48" selected>🇵🇱 +48</option><option value="+49">🇩🇪 +49</option><option value="+44">🇬🇧 +44</option><option value="+353">🇮🇪 +353</option><option value="+31">🇳🇱 +31</option><option value="+32">🇧🇪 +32</option><option value="+33">🇫🇷 +33</option><option value="+43">🇦🇹 +43</option><option value="+420">🇨🇿 +420</option><option value="+421">🇸🇰 +421</option><option value="+370">🇱🇹 +370</option><option value="+380">🇺🇦 +380</option><option value="+47">🇳🇴 +47</option><option value="+46">🇸🇪 +46</option><option value="+45">🇩🇰 +45</option><option value="+39">🇮🇹 +39</option><option value="+34">🇪🇸 +34</option><option value="+1">🇺🇸 +1</option>
+                </select>
+                <input name="phone" type="tel" required autocomplete="tel-national" placeholder="600 100 200" class="min-w-0 flex-1 px-3 py-2 text-[14px] outline-none" />
+              </span>
+            </label>
             <div class="grid grid-cols-2 gap-2.5">
               <label class="block"><span class="lbl">Kod pocztowy firmy</span><input name="postalCode" required inputmode="numeric" autocomplete="postal-code" placeholder="00-000" maxlength="6" class="inp" /></label>
               <label class="block"><span class="lbl">Promień działania (km)</span><input name="radiusKm" type="number" min="5" max="300" step="5" value="30" required class="inp" /></label>
@@ -143,6 +151,7 @@
             <button type="submit" class="mt-1 rounded-2xl bg-ink py-3 text-[14px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">Dołącz bezpłatnie</button>
             <div id="contractor-done" class="hidden rounded-xl bg-ok-soft p-3 text-[13px] text-ink"><strong>Dziękujemy!</strong> Jesteś w bazie wykonawców — zapytania z Twojej okolicy trafią do Twojego panelu. <a href="/konfigurator/firma" class="font-medium underline">Przejdź do panelu wykonawcy →</a></div>
             <p class="text-[11px] text-muted">Administratorem danych jest design3d.pl. Dane służą wyłącznie do przekazywania zapytań o wyceny schodów.</p>
+            <p class="border-t border-line pt-2.5 text-center text-[12.5px] text-muted">Masz już konto? <a href="/konfigurator/firma" data-testid="contractor-login-link" class="font-medium text-ink underline">Zaloguj się numerem telefonu</a></p>
           </form>
         </div>
       </section>
