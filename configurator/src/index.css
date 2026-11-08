@@ -72,3 +72,11 @@ input[type='range'] { accent-color: var(--color-oak); }
 
 /* tekst na scenie bez tła (telefon) — czytelny dzięki jasnej poświacie */
 .overlay-text { text-shadow: 0 0 6px rgba(255,255,255,.95), 0 0 2px rgba(255,255,255,.9); }
+
+/* iOS Safari przybliża stronę przy fokusie pola z czcionką < 16 px — na ekranach dotykowych zawsze ≥ 16 px.
+   Reguła poza warstwami Tailwinda, więc wygrywa z klasami text-[…]. */
+@media (max-width: 767px), (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  select,
+  textarea { font-size: 16px; }
+}

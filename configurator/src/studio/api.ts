@@ -6,7 +6,7 @@ export interface ProjectDto { id: string; name: string; currentVersion: number; 
 export interface ContractorDto { first_name: string; last_name: string; email: string; phone: string; first_at: string; last_at: string }
 export interface CommentDto { id: number; version: number; author_role: 'owner' | 'contractor'; author_name: string; text: string; pos: Vec3 | null; resolved: boolean; created_at: string }
 export interface ShareDto { projectId?: string; name: string; config: Config; currentVersion: number; role: 'owner' | 'contractor' | 'none'; viewer: { name: string } | null; consentText: string; leadsText: string; thumbnail: string | null }
-export interface ContractorForm { firstName: string; lastName: string; companyName: string; email: string; phone: string; consent: boolean; leads: boolean; postalCode: string; radiusKm: string }
+export interface ContractorForm { fullName: string; companyName: string; email: string; phone: string; consent: boolean; leads: boolean; postalCode: string; radiusKm: string }
 export interface QuoteForm { name: string; email: string; phone: string; postalCode: string; radiusKm: string; consent: boolean; contractorIds: number[] }
 export interface NearbyContractor { id: number; name: string; place: string; distanceKm: number; radiusKm: number; servesArea: boolean }
 export interface NearbyDto { origin: { code: string; place: string; precision: 'exact' | 'near' | 'area' }; radiusKm: number; results: NearbyContractor[] }
@@ -67,7 +67,7 @@ export const api = {
   crmUpdateQuote: (projectId: string, b: { status?: QuoteStatus; amount?: string | number | null; note?: string }) => call<{ ok: true }>(`/contractor/quotes/${projectId}`, 'PUT', b),
   crmViewed: (projectId: string) => call<{ ok: true }>(`/contractor/quotes/${projectId}/viewed`, 'POST'),
   me: () => call<{ owner: boolean; phone: string | null; person: { firstName: string; lastName: string } | null; smsTest: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string; phone: string } }>('/me'),
-  phoneStart: (form: { phone: string; firstName: string; lastName: string; consent: boolean }) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/phone/start', 'POST', form),
+  phoneStart: (form: { phone: string; fullName: string; consent: boolean }) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/phone/start', 'POST', form),
   phoneVerify: (phone: string, code: string) => call<{ ok: true; phone: string; claimed: number }>('/phone/verify', 'POST', { phone, code }),
   comments: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }) =>
     call<CommentDto[]>(ref.owner && ref.projectId ? `/projects/${ref.projectId}/comments` : `/shares/${ref.shareToken}/comments`),

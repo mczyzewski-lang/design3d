@@ -65,8 +65,7 @@ await o.screenshot({ path: `${out}/1-wlasciciel-komentarz.png` });
 await o.click('[data-testid="save-share"]');
 await o.waitForSelector('[data-testid="step-phone"]');
 ok((await o.locator('[data-testid="open-find"]').isDisabled()) && (await o.locator('[data-testid="share-url"]').count()) === 0, 'kroki 2 i 3 widoczne, ale nieaktywne przed potwierdzeniem numeru');
-await o.fill('[data-testid="person-first"]', 'Katarzyna');
-await o.fill('[data-testid="person-last"]', 'Kowalska');
+await o.fill('[data-testid="person-name"]', 'Katarzyna Kowalska'); // jedno pole: imię i nazwisko
 // losowy numer: limit 3 kodów na numer / 10 min nie blokuje kolejnych przebiegów
 await o.fill('[data-testid="phone-input"]', `6${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`);
 ok(await o.locator('[data-testid="phone-send"]').isDisabled(), 'bez zgody nie da się wysłać kodu (zgoda pojawia się po wpisaniu numeru)');
@@ -125,8 +124,7 @@ await f.waitForTimeout(600);
 ok((await f.locator('text=nie ma aktywnej sesji właściciela').count()) > 0, '„Jestem właścicielem” bez sesji → informacja');
 await f.click('text=Wróć');
 await f.click('[data-testid="gate-contractor"]');
-await f.fill('[data-testid="gate-firstName"]', 'Jan');
-await f.fill('[data-testid="gate-lastName"]', 'Stolarz');
+await f.fill('[data-testid="gate-fullName"]', 'Jan Stolarz');
 await f.fill('[data-testid="gate-email"]', 'jan@schody-stolarz.pl');
 await f.fill('[data-testid="gate-phone"]', '600 100 200');
 ok((await f.locator('[data-testid="gate-thumb-small"]').count()) === 1, 'mały podgląd projektu przy formularzu');

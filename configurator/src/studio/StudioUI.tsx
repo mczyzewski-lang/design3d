@@ -146,7 +146,7 @@ function Step({ n, title, done, active, children, testId }: { n: number; title: 
 export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClose: () => void; toast: (m: string) => void }) {
   const st = useStudio();
   const [phoneInput, setPhoneInput] = useState('');
-  const [person, setPerson] = useState({ firstName: '', lastName: '' });
+  const [fullName, setFullName] = useState('');
   const [consent, setConsent] = useState(false);
   const [phoneConsentText, setPhoneConsentText] = useState('');
   const [postal, setPostal] = useState('');
@@ -169,7 +169,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
   const send = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setBusy(true); setErr(null);
-    const r = await st.startPhone({ phone: phoneInput, ...person, consent });
+    const r = await st.startPhone({ phone: phoneInput, fullName, consent });
     setBusy(false);
     if ('error' in r) setErr(r.error); else { setSent(r); setCode(''); }
   };
@@ -200,16 +200,13 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
               <p className="text-[12.5px] text-ink/80" data-testid="phone-done">Projekt przypisany do numeru <b>{fmtPhone(st.phone!)}</b>. Na innym urządzeniu wystarczy ten sam numer.</p>
             ) : !sent ? (
               <form className="grid grid-cols-1 gap-2" onSubmit={send}>
-                <div className="grid grid-cols-2 gap-2">
-                  <input data-testid="person-first" required autoComplete="given-name" placeholder="Imię" value={person.firstName} onChange={(e) => setPerson({ ...person, firstName: e.target.value })} className={input} />
-                  <input data-testid="person-last" required autoComplete="family-name" placeholder="Nazwisko" value={person.lastName} onChange={(e) => setPerson({ ...person, lastName: e.target.value })} className={input} />
-                </div>
+                <input data-testid="person-name" required autoComplete="name" placeholder="Imię i nazwisko" value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
                 <div className="flex gap-2">
                   <div className="flex min-w-0 flex-1 items-center rounded-lg border border-line focus-within:border-oak">
                     <span className="pl-3 text-[14px] text-muted">+48</span>
                     <input data-testid="phone-input" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="600 100 200" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} className="min-w-0 flex-1 bg-transparent px-2 py-2 text-[14px] outline-none" />
                   </div>
-                  <button type="submit" data-testid="phone-send" disabled={busy || phoneInput.replace(/\D/g, '').length < 9 || !consent || !person.firstName.trim() || !person.lastName.trim()} className="shrink-0 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? 'Wysyłanie…' : 'Wyślij kod SMS'}</button>
+                  <button type="submit" data-testid="phone-send" disabled={busy || phoneInput.replace(/\D/g, '').length < 9 || !consent || fullName.trim().split(/\s+/).length < 2} className="shrink-0 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? 'Wysyłanie…' : 'Wyślij kod SMS'}</button>
                 </div>
                 {/* zgoda pojawia się po wpisaniu numeru */}
                 {phoneInput.replace(/\D/g, '').length >= 9 && (
@@ -275,7 +272,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
             <form className="mt-1 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (url && postal.length === 6) setFindOpen(true); }}>
               <label className="block min-w-0 flex-1">
                 <span className="sr-only">Kod pocztowy miejsca montażu</span>
-                <input data-testid="step-postal" inputMode="numeric" autoComplete="postal-code" maxLength={6} placeholder="Kod pocztowy, 00-000" value={postal}
+                <input data-testid="step-postal" inputMode="numeric" autoComplete="postal-code" maxLength={6} placeholder="00-000" value={postal}
                   onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setPostal(d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d); }} className={input} disabled={!url} />
               </label>
               <button type="submit" data-testid="open-find" disabled={!url || postal.length !== 6} className="shrink-0 rounded-full bg-ink px-4 text-[12.5px] font-medium text-white disabled:opacity-40">Znajdź wykonawców</button>
@@ -381,14 +378,14 @@ export function ShareGate() {
   const register = useStudio((s) => s.register);
   const continueAsOwner = useStudio((s) => s.continueAsOwner);
   const [who, setWho] = useState<'pick' | 'owner' | 'contractor'>('pick');
-  const [form, setForm] = useState({ firstName: '', lastName: '', companyName: '', email: '', phone: '', consent: false, leads: false, postalCode: '', radiusKm: '30' });
+  const [form, setForm] = useState({ fullName: '', companyName: '', email: '', phone: '', consent: false, leads: false, postalCode: '', radiusKm: '30' });
   const [thumbOk, setThumbOk] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [ownerMsg, setOwnerMsg] = useState<string | null>(null);
   if (!gate) return null;
   const thumb = gate.thumb && thumbOk ? gate.thumb : null;
-  const field = (k: 'firstName' | 'lastName' | 'email' | 'phone', label: string, type = 'text', auto = '') => (
+  const field = (k: 'fullName' | 'email' | 'phone', label: string, type = 'text', auto = '') => (
     <label className="block">
       <span className="text-[11.5px] text-muted">{label}</span>
       <input data-testid={`gate-${k}`} required type={type} autoComplete={auto} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} className="mt-0.5 w-full rounded-lg border border-line px-3 py-2 text-[13.5px] outline-none focus:border-oak" />
@@ -432,7 +429,7 @@ export function ShareGate() {
         )}
         {who === 'contractor' && (
           <form className="mt-4 grid gap-2.5" onSubmit={async (e) => { e.preventDefault(); setBusy(true); const r = await register(form); setBusy(false); setErrors(r ?? []); }}>
-            <div className="grid grid-cols-2 gap-2.5">{field('firstName', 'Imię', 'text', 'given-name')}{field('lastName', 'Nazwisko', 'text', 'family-name')}</div>
+            {field('fullName', 'Imię i nazwisko', 'text', 'name')}
             {field('email', 'E-mail', 'email', 'email')}
             {field('phone', 'Telefon', 'tel', 'tel')}
             <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
@@ -515,7 +512,7 @@ export function FindContractorDialog({ open, onClose, initialPostal }: { open: b
     setDone(null); setErrors([]);
     if (!consentText) void api.me().then((m) => setConsentText(m.texts.quote)).catch(() => {});
     const per = useStudio.getState().person;
-    if (per && !contact.name) setContact((c) => ({ ...c, name: per.firstName }));
+    if (per && !contact.name) setContact((c) => ({ ...c, name: `${per.firstName} ${per.lastName ?? ''}`.trim() }));
     // kod pocztowy wpisany w kroku 3 → od razu wyniki
     if (initialPostal && initialPostal.length === 6) { setPostal(initialPostal); void runSearch(undefined, radius, initialPostal); }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -619,8 +616,8 @@ export function FindContractorDialog({ open, onClose, initialPostal }: { open: b
                 if ('errors' in r) setErrors(r.errors); else setDone({ selected: r.selected });
               }}>
                 <div className="grid gap-2.5 sm:grid-cols-3">
-                  <label className="block"><span className="text-[11.5px] text-muted">Imię</span>
-                    <input data-testid="quote-name" required autoComplete="given-name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} className={input} />
+                  <label className="block"><span className="text-[11.5px] text-muted">Imię i nazwisko</span>
+                    <input data-testid="quote-name" required autoComplete="name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} className={input} />
                   </label>
                   <label className="block"><span className="text-[11.5px] text-muted">E-mail</span>
                     <input data-testid="quote-email" type="email" autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} className={input} />

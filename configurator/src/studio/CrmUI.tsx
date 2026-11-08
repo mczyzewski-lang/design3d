@@ -7,12 +7,12 @@ import { useStudio } from './studioStore';
 
 type Tab = 'quotes' | 'contacts' | 'contracts' | 'calendar' | 'email' | 'profile';
 const TABS: Array<{ key: Tab; label: string; icon: ReactNode }> = [
-  { key: 'quotes', label: 'Wyceny', icon: <Box size={16} /> },
-  { key: 'contacts', label: 'Kontakty', icon: <Users size={16} /> },
-  { key: 'contracts', label: 'Umowy', icon: <FileSignature size={16} /> },
-  { key: 'calendar', label: 'Kalendarz', icon: <CalendarDays size={16} /> },
-  { key: 'email', label: 'E-mail', icon: <Inbox size={16} /> },
-  { key: 'profile', label: 'Profil firmy', icon: <Settings size={16} /> },
+  { key: 'quotes', label: 'Wyceny', icon: <Box size={20} className="md:h-4 md:w-4" /> },
+  { key: 'contacts', label: 'Kontakty', icon: <Users size={20} className="md:h-4 md:w-4" /> },
+  { key: 'contracts', label: 'Umowy', icon: <FileSignature size={20} className="md:h-4 md:w-4" /> },
+  { key: 'calendar', label: 'Kalendarz', icon: <CalendarDays size={20} className="md:h-4 md:w-4" /> },
+  { key: 'email', label: 'E-mail', icon: <Inbox size={20} className="md:h-4 md:w-4" /> },
+  { key: 'profile', label: 'Profil firmy', icon: <Settings size={20} className="md:h-4 md:w-4" /> },
 ];
 const STATUS: Record<QuoteStatus, { label: string; cls: string }> = {
   new: { label: 'Nowa', cls: 'bg-[#e8f0fd] text-[#2f6fd6]' },
@@ -56,16 +56,25 @@ export function CrmShell() {
         )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav className="choices flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-panel px-2 py-2 md:w-56 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:px-3 md:py-4" aria-label="Sekcje panelu">
-          {TABS.map((t) => (
-            <button key={t.key} type="button" data-testid={`crm-tab-${t.key}`} onClick={() => setTab(t.key)}
-              className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[13px] ${tab === t.key ? 'bg-ink text-white' : 'text-ink/80 hover:bg-black/5'}`}>
-              {t.icon}{t.label}
-              {t.key === 'quotes' && fresh > 0 && <span className={`ml-auto rounded-full px-1.5 text-[10.5px] font-semibold ${tab === t.key ? 'bg-white text-ink' : 'bg-[#2f6fd6] text-white'}`}>{fresh}</span>}
-            </button>
-          ))}
+        {/* telefon: dolne menu jak w aplikacji mobilnej; desktop: menu boczne */}
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:z-auto md:flex md:w-56 md:shrink-0 md:flex-col md:gap-1 md:border-r md:border-t-0 md:bg-panel md:px-3 md:py-4 md:pb-4 md:backdrop-blur-none" aria-label="Sekcje panelu" data-testid="crm-nav">
+          {TABS.map((t) => {
+            const active = tab === t.key;
+            return (
+              <button key={t.key} type="button" data-testid={`crm-tab-${t.key}`} onClick={() => setTab(t.key)} aria-current={active ? 'page' : undefined}
+                className={`relative flex flex-col items-center justify-center gap-0.5 px-0.5 pb-1.5 pt-2 text-[10px] leading-tight md:flex-row md:justify-start md:gap-2 md:rounded-lg md:px-3 md:py-2 md:text-[13px] ${active ? 'text-ink md:bg-ink md:text-white' : 'text-muted md:text-ink/80 md:hover:bg-black/5'}`}>
+                {active && <span className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-ink md:hidden" aria-hidden="true" />}
+                <span className="relative">
+                  {t.icon}
+                  {t.key === 'quotes' && fresh > 0 && <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#2f6fd6] px-1 text-[9.5px] font-semibold text-white md:hidden">{fresh}</span>}
+                </span>
+                <span className={`truncate ${active ? 'font-semibold md:font-normal' : ''}`}>{t.key === 'profile' ? <><span className="md:hidden">Profil</span><span className="hidden md:inline">{t.label}</span></> : t.label}</span>
+                {t.key === 'quotes' && fresh > 0 && <span className={`ml-auto hidden rounded-full px-1.5 text-[10.5px] font-semibold md:inline ${active ? 'bg-white text-ink' : 'bg-[#2f6fd6] text-white'}`}>{fresh}</span>}
+              </button>
+            );
+          })}
         </nav>
-        <main className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
+        <main className="min-h-0 flex-1 overflow-y-auto px-3 pb-24 pt-4 sm:px-6 sm:pt-6 md:pb-6">
           {error && <div className="mx-auto max-w-xl rounded-2xl border border-line bg-white p-6 text-center" data-testid="crm-error"><Lock className="mx-auto text-muted" /><p className="mt-2 text-[14px]">{error}</p><a href="/#dla-wykonawcow" className="mt-3 inline-block rounded-full bg-ink px-4 py-2 text-[13px] text-white">Dołącz jako wykonawca</a></div>}
           {!data && !error && <p className="text-[13px] text-muted">Wczytywanie…</p>}
           {data && tab === 'quotes' && <Quotes data={data} highlight={highlight} reload={load} />}
@@ -246,7 +255,7 @@ function Profile({ data, reload }: { data: CrmOverview; reload: () => Promise<vo
       }} data-testid="crm-profile">
         <h1 className="text-[18px] font-semibold">Profil firmy</h1>
         <label className="text-[12px] text-muted">Nazwa firmy (pokazywana inwestorom)<input value={f.companyName} onChange={(e) => setF({ ...f, companyName: e.target.value })} className={input} /></label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="text-[12px] text-muted">Imię i nazwisko<input value={`${me.firstName} ${me.lastName}`} disabled className={`${input} bg-paper text-muted`} /></label>
           <label className="text-[12px] text-muted">E-mail<input value={me.email} disabled className={`${input} bg-paper text-muted`} /></label>
         </div>

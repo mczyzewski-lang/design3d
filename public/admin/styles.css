@@ -125,3 +125,6 @@ pre.clause { white-space: pre-wrap; background: var(--panel-2); padding: 14px; b
 .dot.running { background: var(--ok); animation: pulse 1.4s infinite; }
 .dot.paused { background: var(--warn); }
 @keyframes pulse { 50% { opacity: .35; } }
+
+/* iOS: bez przybliżania przy fokusie pól (czcionka ≥ 16 px na ekranach dotykowych) */
+@media (max-width: 760px), (pointer: coarse) { input, select, textarea { font-size: 16px; } }

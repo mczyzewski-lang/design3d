@@ -44,7 +44,7 @@ interface StudioState {
   phone: string | null;
   loadMe: () => Promise<void>;
   /** wysyła kod SMS; w trybie testowym (brak bramki) zwraca kod do pokazania */
-  startPhone: (form: { phone: string; firstName: string; lastName: string; consent: boolean }) => Promise<{ error: string } | { phone: string; testCode?: string }>;
+  startPhone: (form: { phone: string; fullName: string; consent: boolean }) => Promise<{ error: string } | { phone: string; testCode?: string }>;
   verifyPhone: (phone: string, code: string) => Promise<string | null>;
   projectId: string | null;
   name: string;

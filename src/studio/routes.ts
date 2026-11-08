@@ -121,6 +121,15 @@ function parseConfig(v: unknown): string | null {
   const s = JSON.stringify(v);
   return s.length > MAX_CONFIG ? null : s;
 }
+/** „Jan Maria Kowalski” → imię „Jan”, nazwisko „Maria Kowalski” (jedno pole w formularzach; stare pola dalej działają). */
+function personName(b: Record<string, unknown>): { first: string; last: string } {
+  const full = cleanName(b.fullName, 140).replace(/\s+/g, ' ');
+  if (full) {
+    const i = full.indexOf(' ');
+    return i < 0 ? { first: full.slice(0, 60), last: '' } : { first: full.slice(0, i).slice(0, 60), last: full.slice(i + 1).slice(0, 80) };
+  }
+  return { first: cleanName(b.firstName, 60), last: cleanName(b.lastName, 80) };
+}
 const cleanName = (v: unknown, max = 120) => String(v ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
 
 function projectView(id: string): Row | null {
@@ -305,11 +314,9 @@ export function studioRouter(): express.Router {
   /** Krok 1 „Zapisz i udostępnij”: wyślij kod SMS na numer. */
   r.post('/phone/start', wrap(async (req, res) => {
     const phone = normPhone(req.body?.phone);
-    const first = cleanName(req.body?.firstName, 60);
-    const last = cleanName(req.body?.lastName, 80);
+    const { first, last } = personName(req.body ?? {});
     const errors: string[] = [];
-    if (!first) errors.push('Podaj imię');
-    if (!last) errors.push('Podaj nazwisko');
+    if (!first || !last) errors.push('Podaj imię i nazwisko');
     if (!phone) errors.push('Podaj polski numer telefonu (9 cyfr)');
     if (req.body?.consent !== true) errors.push('Zaznacz zgodę na przetwarzanie danych');
     if (errors.length || !phone) return res.status(400).json({ error: errors.join('. '), errors });
@@ -466,14 +473,12 @@ export function studioRouter(): express.Router {
   const registerContractor = (req: Request, res: Response, origin: { source: string; via?: string | null; projectId?: string; consentRequired: boolean }): number | null => {
     if (rateLimited(req)) { res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' }); return null; }
     const b = req.body ?? {};
-    const first = cleanName(b.firstName, 60);
-    const last = cleanName(b.lastName, 80);
+    const { first, last } = personName(b);
     const company = cleanName(b.companyName, 120) || null;
     const email = String(b.email ?? '').trim().toLowerCase().slice(0, 160);
     const phone = String(b.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20);
     const errors: string[] = [];
-    if (!first) errors.push('Podaj imię');
-    if (!last) errors.push('Podaj nazwisko');
+    if (!first || !last) errors.push('Podaj imię i nazwisko');
     if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) errors.push('Podaj poprawny e-mail');
     if (phone.replace(/\D/g, '').length < 9) errors.push('Podaj poprawny numer telefonu');
     if (origin.consentRequired && b.consent !== true) errors.push('Zaznacz zgodę, aby zobaczyć projekt');

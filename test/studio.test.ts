@@ -356,3 +356,17 @@ test('panel wykonawcy: wyceny z tagiem „nowe”, kontakty inwestora, status/kw
   assert.equal((await firm('/contractor/me', { method: 'PATCH', body: { companyName: 'Stal-Drew Kraków', phone: '608000111', leads: true, postalCode: '30-001', radiusKm: 60 } })).status, 200);
   assert.equal((await firm('/contractor/overview')).body.me.radiusKm, 60);
 });
+
+test('jedno pole „Imię i nazwisko”: serwer rozdziela, samo imię to błąd', async () => {
+  (await import('../src/studio/routes.ts')).resetRateLimits();
+  const z = browser();
+  const bad = await z('/contractors', { method: 'POST', body: { fullName: 'Jan', email: 'jan.sam@x.pl', phone: '600 600 600', postalCode: '31-500', radiusKm: 30, leads: true } });
+  assert.equal(bad.status, 400);
+  assert.ok(bad.body.errors.includes('Podaj imię i nazwisko'));
+  const ok = await z('/contractors', { method: 'POST', body: { fullName: '  Jan   Maria Kowalski ', email: 'jan.mk@x.pl', phone: '600 600 601', postalCode: '31-500', radiusKm: 30, leads: true } });
+  assert.equal(ok.status, 201);
+  const r = get(`SELECT first_name, last_name FROM studio_contractors WHERE email = 'jan.mk@x.pl'`)!;
+  assert.deepEqual([r.first_name, r.last_name], ['Jan', 'Maria Kowalski']);
+  const st = await browser()('/phone/start', { method: 'POST', body: { fullName: 'Ola Nowak', phone: '600 600 602', consent: true } });
+  assert.equal(st.status, 200);
+});
