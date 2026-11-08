@@ -24,6 +24,8 @@ export function ensureStudioSchema(): void {
       ['company_name', 'TEXT'], ['listed', 'INTEGER NOT NULL DEFAULT 0'],
     ],
     studio_projects: [['source', 'TEXT'], ['owner_phone', 'TEXT']],
+    studio_otp: [['first_name', 'TEXT'], ['last_name', 'TEXT']],
+    studio_phones: [['first_name', 'TEXT'], ['last_name', 'TEXT'], ['consent_text', 'TEXT'], ['consent_at', 'TEXT']],
   };
   for (const [table, list] of Object.entries(migrate)) {
     const cols = new Set(all(`PRAGMA table_info(${table})`).map((c) => c.name as string));
@@ -37,6 +39,8 @@ export const CONSENT_TEXT =
 
 /** Dobrowolna, osobna zgoda na zapytania o wyceny z okolicy (marketing). */
 export const LEADS_TEXT = 'Chcę bezpłatnie otrzymywać zapytania o wyceny schodów z mojej okolicy i wyrażam zgodę na pokazywanie nazwy mojej firmy (lub imienia i inicjału nazwiska), miejscowości i zasięgu w wyszukiwarce wykonawców design3d.pl.';
+export const PHONE_CONSENT_TEXT =
+  'Wyrażam zgodę na przetwarzanie moich danych (imię, nazwisko, numer telefonu) przez design3d.pl w celu zapisania projektu, kontaktu w sprawie wyceny oraz przekazania projektu i danych kontaktowych wykonawcom, którym go udostępnię lub których wybiorę. Zgodę mogę wycofać w każdej chwili.';
 /** Promień wyszukiwania wykonawców przez inwestora (km). */
 export const SEARCH_RADIUS_KM = 50;
 const MAX_THUMB = 600_000; // bajtów po zdekodowaniu
@@ -89,6 +93,10 @@ export function normPhone(v: unknown): string | null {
   if (/^\d{9}$/.test(d)) d = `+48${d}`;
   if (/^48\d{9}$/.test(d)) d = `+${d}`;
   return /^\+48\d{9}$/.test(d) ? d : null;
+}
+function phoneAccount(req: Request): Row | null {
+  const p = phoneOf(req);
+  return p ? (get(`SELECT phone, first_name, last_name FROM studio_phones WHERE phone = ?`, p) ?? null) : null;
 }
 function phoneOf(req: Request): string | null {
   const k = cookies(req)[OWNER_COOKIE];
@@ -199,8 +207,9 @@ export function studioRouter(): express.Router {
     const c = contractorOf(req);
     res.json({
       owner: !!cookies(req)[OWNER_COOKIE], phone: phoneOf(req), smsTest: !smsConfigured(),
+      person: (() => { const a = phoneAccount(req); return a?.first_name ? { firstName: a.first_name, lastName: a.last_name } : null; })(),
       contractor: c ? { name: `${c.first_name} ${c.last_name}`, email: c.email } : null,
-      texts: { consent: CONSENT_TEXT, leads: LEADS_TEXT, quote: QUOTE_CONSENT_TEXT },
+      texts: { consent: CONSENT_TEXT, leads: LEADS_TEXT, quote: QUOTE_CONSENT_TEXT, phone: PHONE_CONSENT_TEXT },
     });
   });
 
@@ -214,6 +223,13 @@ export function studioRouter(): express.Router {
       run(`INSERT INTO studio_projects (id, name, source, owner_phone) VALUES (?, ?, ?, ?)`, id, name, cleanTag(req.body?.source), phoneOf(req));
       run(`INSERT INTO studio_project_owners (project_id, owner_key_hash) VALUES (?, ?)`, id, sha(key));
       run(`INSERT INTO studio_versions (project_id, version, label, config) VALUES (?, 1, ?, ?)`, id, cleanName(req.body?.label, 80) || 'Wersja 1', cfg);
+      // wycena utworzona przez zalogowanego wykonawcę trafia do jego panelu
+      const firm = contractorOf(req);
+      if (firm) {
+        run(`INSERT OR IGNORE INTO studio_access (project_id, contractor_id) VALUES (?, ?)`, id, firm.id);
+        run(`INSERT OR IGNORE INTO studio_contractor_quotes (contractor_id, project_id, status, viewed_at) VALUES (?, ?, 'in_progress', ?)`, firm.id, id, nowIso());
+        if (!get(`SELECT 1 FROM studio_shares WHERE project_id = ?`, id)) run(`INSERT INTO studio_shares (token, project_id) VALUES (?, ?)`, token(12), id);
+      }
     });
     res.status(201).json(projectView(id));
   }));
@@ -289,13 +305,20 @@ export function studioRouter(): express.Router {
   /** Krok 1 „Zapisz i udostępnij”: wyślij kod SMS na numer. */
   r.post('/phone/start', wrap(async (req, res) => {
     const phone = normPhone(req.body?.phone);
-    if (!phone) return res.status(400).json({ error: 'Podaj polski numer telefonu (9 cyfr)' });
+    const first = cleanName(req.body?.firstName, 60);
+    const last = cleanName(req.body?.lastName, 80);
+    const errors: string[] = [];
+    if (!first) errors.push('Podaj imię');
+    if (!last) errors.push('Podaj nazwisko');
+    if (!phone) errors.push('Podaj polski numer telefonu (9 cyfr)');
+    if (req.body?.consent !== true) errors.push('Zaznacz zgodę na przetwarzanie danych');
+    if (errors.length || !phone) return res.status(400).json({ error: errors.join('. '), errors });
     if (rateLimited(req, 6, 10 * 60_000, 'phone')) return res.status(429).json({ error: 'Zbyt wiele prób — spróbuj za kilka minut' });
     const recent = get(`SELECT COUNT(*) n FROM studio_otp WHERE phone = ? AND created_at > ?`, phone, new Date(Date.now() - 10 * 60_000).toISOString())!.n as number;
     if (recent >= 3) return res.status(429).json({ error: 'Wysłaliśmy już kilka kodów na ten numer — spróbuj za 10 minut' });
     const key = ownerKey(req, res, true)!;
     const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-    run(`INSERT INTO studio_otp (phone, owner_key_hash, code_hash, expires_at) VALUES (?, ?, ?, ?)`, phone, sha(key), sha(`${phone}:${code}`), new Date(Date.now() + 10 * 60_000).toISOString());
+    run(`INSERT INTO studio_otp (phone, owner_key_hash, code_hash, expires_at, first_name, last_name) VALUES (?, ?, ?, ?, ?, ?)`, phone, sha(key), sha(`${phone}:${code}`), new Date(Date.now() + 10 * 60_000).toISOString(), first, last);
     const sms = await sendSms(phone, `Kod Stair Studio: ${code}. Wpisz go, aby przypisać projekt schodów do numeru. design3d.pl`);
     if (!sms.sent && !sms.demo) return res.status(502).json({ error: 'Nie udało się wysłać SMS — spróbuj ponownie za chwilę' });
     // tryb testowy (brak bramki SMS): kod wraca w odpowiedzi, żeby dało się przejść dalej
@@ -318,7 +341,9 @@ export function studioRouter(): express.Router {
     const k = sha(key);
     const claimed = tx(() => {
       run(`UPDATE studio_otp SET used_at = ? WHERE id = ?`, nowIso(), otp.id);
-      run(`INSERT INTO studio_phones (phone, verified_at, method) VALUES (?, ?, ?) ON CONFLICT(phone) DO UPDATE SET verified_at = excluded.verified_at`, phone, nowIso(), smsConfigured() ? 'sms' : 'test');
+      run(`INSERT INTO studio_phones (phone, verified_at, method, first_name, last_name, consent_text, consent_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(phone) DO UPDATE SET verified_at = excluded.verified_at, first_name = excluded.first_name, last_name = excluded.last_name, consent_text = excluded.consent_text, consent_at = excluded.consent_at`,
+        phone, nowIso(), smsConfigured() ? 'sms' : 'test', otp.first_name ?? null, otp.last_name ?? null, PHONE_CONSENT_TEXT, nowIso());
       run(`INSERT INTO studio_owner_phones (owner_key_hash, phone, verified_at) VALUES (?, ?, ?) ON CONFLICT(owner_key_hash) DO UPDATE SET phone = excluded.phone, verified_at = excluded.verified_at`, k, phone, nowIso());
       // projekty tej przeglądarki bez numeru → przypisz numer; projekty numeru z innych urządzeń → dostęp tutaj
       run(`UPDATE studio_projects SET owner_phone = ? WHERE owner_phone IS NULL AND id IN (SELECT project_id FROM studio_project_owners WHERE owner_key_hash = ?)`, phone, k);
@@ -417,7 +442,7 @@ export function studioRouter(): express.Router {
         cleanVia(req.query.via) ?? 'link', s.project_id, acc.role);
     }
     res.json({
-      projectId: acc.role === 'owner' ? s.project_id : undefined,
+      projectId: acc.role !== 'none' ? s.project_id : undefined, // firma z dostępem: do panelu wykonawcy
       name: view.name, config: view.config, currentVersion: view.currentVersion, role: acc.role,
       viewer: acc.contractor ? { name: `${acc.contractor.first_name} ${acc.contractor.last_name}` } : null,
       consentText: CONSENT_TEXT, leadsText: LEADS_TEXT,
@@ -504,6 +529,104 @@ export function studioRouter(): express.Router {
     res.status(201).json({ ok: true });
   }));
 
+  // ---------- panel wykonawcy (CRM) ----------
+  const contractorOnly = (req: Request, res: Response): Row | null => {
+    const c = contractorOf(req);
+    if (!c) { res.status(401).json({ error: 'Zaloguj się jako wykonawca — otwórz link do projektu albo dołącz na stronie głównej' }); return null; }
+    return c;
+  };
+  const SHAPE_NAME: Record<string, string> = { I: 'proste', L: 'L', U: 'U', S: 'kręcone' };
+  const QUOTE_STATUSES = new Set(['new', 'in_progress', 'sent', 'won', 'lost']);
+
+  /** Wyceny (projekty, do których firma ma dostęp), kontakty inwestorów i profil firmy. */
+  r.get('/contractor/overview', (req, res) => {
+    const c = contractorOnly(req, res);
+    if (!c) return;
+    const quotes = all(
+      `SELECT p.id, p.name, p.owner_phone, p.current_version, a.first_at, a.last_at,
+              (SELECT token FROM studio_shares s WHERE s.project_id = p.id ORDER BY s.created_at LIMIT 1) token,
+              (SELECT config FROM studio_versions v WHERE v.project_id = p.id AND v.version = p.current_version) config,
+              (SELECT COUNT(*) FROM studio_comments m WHERE m.project_id = p.id) comments
+       FROM studio_access a JOIN studio_projects p ON p.id = a.project_id WHERE a.contractor_id = ? ORDER BY a.first_at DESC`, c.id,
+    ).map((p) => {
+      let shape = '?';
+      try { shape = JSON.parse(p.config as string)?.stairs?.shape ?? '?'; } catch { /* uszkodzona konfiguracja */ }
+      const qr = get(`SELECT name, email, phone, postal_code, created_at FROM studio_quote_requests WHERE project_id = ? ORDER BY id DESC LIMIT 1`, p.id);
+      const acc = p.owner_phone ? get(`SELECT first_name, last_name FROM studio_phones WHERE phone = ?`, p.owner_phone) : null;
+      const q = get(`SELECT status, amount, note, viewed_at, updated_at FROM studio_contractor_quotes WHERE contractor_id = ? AND project_id = ?`, c.id, p.id);
+      const ownerName = acc?.first_name ? `${acc.first_name} ${acc.last_name ?? ''}`.trim() : (qr?.name as string) || 'Inwestor';
+      return {
+        projectId: p.id, token: p.token, projectName: p.name,
+        title: `Schody ${SHAPE_NAME[shape] ?? shape} — ${qr?.postal_code ?? 'bez kodu pocztowego'}`,
+        shape, postalCode: qr?.postal_code ?? null,
+        owner: { name: ownerName, phone: (p.owner_phone as string) ?? (qr?.phone as string) ?? null, email: (qr?.email as string) ?? null },
+        receivedAt: p.first_at, lastOpenedAt: p.last_at, comments: p.comments,
+        status: (q?.status as string) ?? 'new', amount: q?.amount ?? null, note: q?.note ?? null,
+        isNew: !q?.viewed_at, updatedAt: q?.updated_at ?? null,
+      };
+    });
+    // kontakty: inwestorzy z wycen (wg telefonu / e-maila / nazwy)
+    const contacts = new Map<string, { name: string; phone: string | null; email: string | null; quotes: number; last: string }>();
+    for (const q of quotes) {
+      const k = q.owner.phone ?? q.owner.email ?? q.owner.name;
+      const e = contacts.get(k);
+      if (e) { e.quotes++; if (q.receivedAt > e.last) e.last = q.receivedAt as string; }
+      else contacts.set(k, { name: q.owner.name, phone: q.owner.phone, email: q.owner.email, quotes: 1, last: q.receivedAt as string });
+    }
+    res.json({
+      me: {
+        firstName: c.first_name, lastName: c.last_name, companyName: c.company_name ?? null, email: c.email, phone: c.phone,
+        postalCode: c.postal_code ?? null, radiusKm: c.radius_km ?? null, leads: !!c.leads_opt_in, listed: !!c.listed, since: c.created_at,
+      },
+      quotes, contacts: [...contacts.values()], leadsText: LEADS_TEXT,
+    });
+  });
+
+  r.patch('/contractor/me', wrap((req, res) => {
+    const c = contractorOnly(req, res);
+    if (!c) return;
+    const b = req.body ?? {};
+    const company = cleanName(b.companyName, 120) || null;
+    const phone = String(b.phone ?? c.phone).replace(/[^\d+]/g, '').slice(0, 20);
+    const leads = b.leads === true;
+    const postal = normPostal(b.postalCode);
+    const radius = Math.round(Number(b.radiusKm));
+    const errors: string[] = [];
+    if (phone.replace(/\D/g, '').length < 9) errors.push('Podaj poprawny numer telefonu');
+    if (leads && (!postal || !geocodePostal(postal))) errors.push('Podaj kod pocztowy w formacie 00-000');
+    if (leads && !(radius >= 5 && radius <= 300)) errors.push('Podaj promień od 5 do 300 km');
+    if (errors.length) return res.status(400).json({ error: errors.join('. '), errors });
+    run(`UPDATE studio_contractors SET company_name = ?, phone = ?, leads_opt_in = ?, listed = ?, postal_code = ?, radius_km = ?,
+           leads_consent_text = CASE WHEN ? THEN ? ELSE NULL END, leads_consent_at = CASE WHEN ? THEN COALESCE(leads_consent_at, ?) ELSE NULL END WHERE id = ?`,
+      company, phone, leads ? 1 : 0, leads ? 1 : 0, leads ? postal : null, leads ? radius : null, leads ? 1 : 0, LEADS_TEXT, leads ? 1 : 0, nowIso(), c.id);
+    res.json({ ok: true });
+  }));
+
+  /** Status, kwota i notatka wyceny (widoczne tylko dla tej firmy). */
+  r.put('/contractor/quotes/:pid', wrap((req, res) => {
+    const c = contractorOnly(req, res);
+    if (!c) return;
+    const pid = String(req.params.pid);
+    if (!get(`SELECT 1 FROM studio_access WHERE contractor_id = ? AND project_id = ?`, c.id, pid)) return res.status(404).json({ error: 'Brak dostępu do projektu' });
+    const b = req.body ?? {};
+    const status = QUOTE_STATUSES.has(b.status) ? b.status : null;
+    const amount = b.amount === null || b.amount === '' || b.amount === undefined ? null : Math.round(Number(String(b.amount).replace(',', '.')) * 100) / 100;
+    if (amount !== null && !(amount >= 0 && amount < 10_000_000)) return res.status(400).json({ error: 'Nieprawidłowa kwota' });
+    const note = b.note === undefined ? undefined : String(b.note).slice(0, 2000);
+    run(`INSERT INTO studio_contractor_quotes (contractor_id, project_id, status, amount, note, viewed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(contractor_id, project_id) DO UPDATE SET status = COALESCE(?, status), amount = ?, note = COALESCE(?, note), viewed_at = COALESCE(viewed_at, excluded.viewed_at), updated_at = excluded.updated_at`,
+      c.id, pid, status ?? 'in_progress', amount, note ?? null, nowIso(), nowIso(), status, amount, note ?? null);
+    res.json({ ok: true });
+  }));
+  r.post('/contractor/quotes/:pid/viewed', (req, res) => {
+    const c = contractorOnly(req, res);
+    if (!c) return;
+    const pid = String(req.params.pid);
+    if (!get(`SELECT 1 FROM studio_access WHERE contractor_id = ? AND project_id = ?`, c.id, pid)) return res.status(404).json({ error: 'Brak dostępu do projektu' });
+    run(`INSERT INTO studio_contractor_quotes (contractor_id, project_id, viewed_at) VALUES (?, ?, ?) ON CONFLICT(contractor_id, project_id) DO UPDATE SET viewed_at = COALESCE(viewed_at, excluded.viewed_at)`, c.id, pid, nowIso());
+    res.json({ ok: true });
+  });
+
   /** Anonimowe zdarzenia (wejście na landing / do konfiguratora, wybór układu na landingu). */
   const EVENT_TYPES = new Set(['visit', 'landing_shape']);
   const PAGES = new Set(['landing', 'configurator']);
@@ -555,7 +678,10 @@ export function studioRouter(): express.Router {
     const reqId = tx(() => {
       const rid = Number(run(`INSERT INTO studio_quote_requests (project_id, name, email, phone, postal_code, radius_km, consent_text, consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         id, name, okEmail ? email : null, okPhone ? phone : null, postal, radius, QUOTE_CONSENT_TEXT, nowIso()).lastInsertRowid);
-      for (const c of chosen) run(`INSERT INTO studio_quote_request_contractors (request_id, contractor_id, distance_km) VALUES (?, ?, ?)`, rid, c.id, c.distanceKm);
+      for (const c of chosen) {
+        run(`INSERT INTO studio_quote_request_contractors (request_id, contractor_id, distance_km) VALUES (?, ?, ?)`, rid, c.id, c.distanceKm);
+        touch(id, c.id); // projekt pojawia się w panelu wykonawcy jako nowa wycena
+      }
       return rid;
     });
     res.status(201).json({ ok: true, id: reqId, nearby: found.length, selected: chosen.length });

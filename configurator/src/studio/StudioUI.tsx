@@ -17,7 +17,7 @@ function Modal({ open, onClose, children, width = 'max-w-md' }: { open: boolean;
         <motion.div className="fixed inset-0 z-50 overflow-y-auto bg-black/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
           {/* przewijane, gdy okno jest wyższe niż ekran (telefon) */}
           <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div className={`w-full ${width} rounded-2xl bg-white p-5 shadow-2xl`} initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }} onMouseDown={(e) => e.stopPropagation()}>
+            <motion.div className={`w-full min-w-0 ${width} rounded-2xl bg-white p-5 shadow-2xl`} initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }} onMouseDown={(e) => e.stopPropagation()}>
               {children}
             </motion.div>
           </div>
@@ -67,7 +67,7 @@ export function ProjectActions({ toast }: { toast: (m: string) => void }) {
   return (
     <div className="flex items-center gap-1.5">
       {owner && st.versions.length > 0 && <span className="hidden text-[11.5px] text-muted lg:inline">{st.name} · wersja {st.version}{dirty ? ' · niezapisane zmiany' : ''}</span>}
-      {contractor && <span className="hidden items-center gap-1 rounded-full bg-[#e8f0fd] px-2.5 py-1 text-[11.5px] text-[#2f6fd6] md:flex"><HardHat size={13} />{st.viewerName} · firma wykonawcza</span>}
+      {contractor && <button type="button" data-testid="back-to-crm" onClick={() => st.setCrm(true)} className="flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-[12px] hover:border-oak"><HardHat size={13} /><span className="hidden sm:inline">← Panel wykonawcy</span><span className="sm:hidden">Panel</span></button>}
       <div className="relative flex" ref={ref}>
         {contractor ? (
           <button type="button" data-testid="save" disabled={st.busy} onClick={save} className="flex items-center gap-2 rounded-l-full bg-ink py-1.5 pl-3.5 pr-3 text-[12.5px] font-medium text-white hover:bg-ink/85 disabled:opacity-60">
@@ -135,7 +135,7 @@ async function copy(text: string): Promise<boolean> {
 /** Krok w oknie „Zapisz i udostępnij” — numerowany, widoczny od razu, nieaktywny do czasu poprzedniego kroku. */
 function Step({ n, title, done, active, children, testId }: { n: number; title: string; done: boolean; active: boolean; children: ReactNode; testId?: string }) {
   return (
-    <li className={`relative pl-10 ${active || done ? '' : 'opacity-55'}`} data-testid={testId}>
+    <li className={`relative min-w-0 pl-10 ${active || done ? '' : 'opacity-55'}`} data-testid={testId}>
       <span className={`absolute left-0 top-0 grid h-7 w-7 place-items-center rounded-full text-[12.5px] font-bold ${done ? 'bg-ok text-white' : active ? 'bg-ink text-white' : 'border border-line bg-paper text-muted'}`}>{done ? <Check size={15} /> : n}</span>
       <div className="text-[14px] font-semibold leading-7">{title}</div>
       <div className="mt-1">{children}</div>
@@ -146,6 +146,10 @@ function Step({ n, title, done, active, children, testId }: { n: number; title: 
 export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClose: () => void; toast: (m: string) => void }) {
   const st = useStudio();
   const [phoneInput, setPhoneInput] = useState('');
+  const [person, setPerson] = useState({ firstName: '', lastName: '' });
+  const [consent, setConsent] = useState(false);
+  const [phoneConsentText, setPhoneConsentText] = useState('');
+  const [postal, setPostal] = useState('');
   const [sent, setSent] = useState<null | { phone: string; testCode?: string }>(null);
   const [code, setCode] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -157,6 +161,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
   useEffect(() => {
     if (!open) return;
     setErr(null); setCopied(false); setUrl(null);
+    if (!phoneConsentText) void api.me().then((m) => setPhoneConsentText(m.texts.phone)).catch(() => {});
     // numer już potwierdzony → od razu zapis i link
     if (st.phone) void st.ensureShare().then((u) => { if (u) setUrl(u); });
   }, [open, st.phone]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -164,7 +169,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
   const send = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setBusy(true); setErr(null);
-    const r = await st.startPhone(phoneInput);
+    const r = await st.startPhone({ phone: phoneInput, ...person, consent });
     setBusy(false);
     if ('error' in r) setErr(r.error); else { setSent(r); setCode(''); }
   };
@@ -177,7 +182,7 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
     if (r) setErr(r); else toast('Numer potwierdzony — projekt przypisany');
   };
   const text = `Projekt schodów „${st.name}” w Stair Studio — zobacz i wyceń: `;
-  const input = 'w-full rounded-lg border border-line px-3 py-2 text-[14px] outline-none focus:border-oak';
+  const input = 'w-full min-w-0 rounded-lg border border-line px-3 py-2 text-[14px] outline-none focus:border-oak';
 
   return (
     <>
@@ -194,15 +199,28 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
             {verified ? (
               <p className="text-[12.5px] text-ink/80" data-testid="phone-done">Projekt przypisany do numeru <b>{fmtPhone(st.phone!)}</b>. Na innym urządzeniu wystarczy ten sam numer.</p>
             ) : !sent ? (
-              <form className="flex gap-2" onSubmit={send}>
-                <div className="flex min-w-0 flex-1 items-center rounded-lg border border-line focus-within:border-oak">
-                  <span className="pl-3 text-[14px] text-muted">+48</span>
-                  <input data-testid="phone-input" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="600 100 200" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} className="min-w-0 flex-1 bg-transparent px-2 py-2 text-[14px] outline-none" />
+              <form className="grid grid-cols-1 gap-2" onSubmit={send}>
+                <div className="grid grid-cols-2 gap-2">
+                  <input data-testid="person-first" required autoComplete="given-name" placeholder="Imię" value={person.firstName} onChange={(e) => setPerson({ ...person, firstName: e.target.value })} className={input} />
+                  <input data-testid="person-last" required autoComplete="family-name" placeholder="Nazwisko" value={person.lastName} onChange={(e) => setPerson({ ...person, lastName: e.target.value })} className={input} />
                 </div>
-                <button type="submit" data-testid="phone-send" disabled={busy || phoneInput.replace(/\D/g, '').length < 9} className="shrink-0 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? 'Wysyłanie…' : 'Wyślij kod SMS'}</button>
+                <div className="flex gap-2">
+                  <div className="flex min-w-0 flex-1 items-center rounded-lg border border-line focus-within:border-oak">
+                    <span className="pl-3 text-[14px] text-muted">+48</span>
+                    <input data-testid="phone-input" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="600 100 200" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} className="min-w-0 flex-1 bg-transparent px-2 py-2 text-[14px] outline-none" />
+                  </div>
+                  <button type="submit" data-testid="phone-send" disabled={busy || phoneInput.replace(/\D/g, '').length < 9 || !consent || !person.firstName.trim() || !person.lastName.trim()} className="shrink-0 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-white disabled:opacity-50">{busy ? 'Wysyłanie…' : 'Wyślij kod SMS'}</button>
+                </div>
+                {/* zgoda pojawia się po wpisaniu numeru */}
+                {phoneInput.replace(/\D/g, '').length >= 9 && (
+                  <label className="flex items-start gap-2 text-[11.5px] leading-snug text-ink/75">
+                    <input data-testid="phone-consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" />
+                    <span>{phoneConsentText || 'Wyrażam zgodę na przetwarzanie moich danych (imię, nazwisko, numer telefonu) przez design3d.pl w celu zapisania projektu i kontaktu w sprawie wyceny.'}</span>
+                  </label>
+                )}
               </form>
             ) : (
-              <form className="grid gap-2" onSubmit={verify}>
+              <form className="grid grid-cols-1 gap-2" onSubmit={verify}>
                 <p className="text-[12px] text-muted">Wysłaliśmy 6-cyfrowy kod na <b className="text-ink">{fmtPhone(sent.phone)}</b>.</p>
                 {sent.testCode && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12px] text-warn" data-testid="phone-test-code">Tryb testowy (bramka SMS nie jest jeszcze skonfigurowana) — Twój kod: <b className="tracking-[0.2em]">{sent.testCode}</b></p>}
                 <div className="flex gap-2">
@@ -244,17 +262,28 @@ export function SaveShareDialog({ open, onClose, toast }: { open: boolean; onClo
                 )}
               </>
             ) : (
-              <p className="text-[12px] text-muted">{verified ? 'Zapisywanie projektu i tworzenie linku…' : 'Link pojawi się po potwierdzeniu numeru.'}</p>
+              <p className="flex items-center gap-2 text-[12px] text-muted" data-testid="link-pending">
+                <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-muted/25 border-t-muted/60" aria-hidden="true" />
+                {verified ? 'Zapisywanie projektu i tworzenie linku…' : 'Link pojawi się po potwierdzeniu numeru.'}
+              </p>
             )}
           </Step>
 
           <Step n={3} title="Znajdź wykonawców w okolicy" done={false} active={!!url} testId="step-find">
-            <p className="text-[12px] text-muted">Wpisz kod pocztowy — pokażemy firmy schodowe w promieniu 50 km i poprosisz wybrane o wycenę.</p>
-            <button type="button" data-testid="open-find" disabled={!url} onClick={() => setFindOpen(true)} className="mt-2 rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-white disabled:opacity-40">Znajdź wykonawców</button>
+            <p className="text-[12px] text-muted">Pokażemy firmy schodowe w promieniu 50 km i poprosisz wybrane o wycenę.</p>
+            <div className="mt-2 text-[12px] font-medium text-ink/80">Gdzie chcesz montować schody?</div>
+            <form className="mt-1 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (url && postal.length === 6) setFindOpen(true); }}>
+              <label className="block min-w-0 flex-1">
+                <span className="sr-only">Kod pocztowy miejsca montażu</span>
+                <input data-testid="step-postal" inputMode="numeric" autoComplete="postal-code" maxLength={6} placeholder="Kod pocztowy, 00-000" value={postal}
+                  onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setPostal(d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d); }} className={input} disabled={!url} />
+              </label>
+              <button type="submit" data-testid="open-find" disabled={!url || postal.length !== 6} className="shrink-0 rounded-full bg-ink px-4 text-[12.5px] font-medium text-white disabled:opacity-40">Znajdź wykonawców</button>
+            </form>
           </Step>
         </ol>
       </Modal>
-      <FindContractorDialog open={findOpen} onClose={() => { setFindOpen(false); onClose(); }} />
+      <FindContractorDialog open={findOpen} initialPostal={postal} onClose={() => { setFindOpen(false); onClose(); }} />
     </>
   );
 }
@@ -304,7 +333,8 @@ export function CommentsCard() {
   useEffect(() => {
     if (st.activeComment) document.getElementById(`comment-${st.activeComment}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [st.activeComment]);
-  if (st.role === 'none') return null;
+  // kontener tylko, gdy są komentarze (dodawanie: przycisk „Komentarz w 3D” pod sceną)
+  if (st.role === 'none' || st.comments.length === 0) return null;
   const open = st.comments.filter((c) => !c.resolved).length;
   return (
     <div className={`mx-3 mb-3 rounded-2xl border border-line bg-white ${expanded ? 'p-4' : 'px-4 py-2'}`} data-testid="comments-card">
@@ -465,7 +495,7 @@ export function FindContractorCard() {
 
 const fmtPostal = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 5); return d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d; };
 
-export function FindContractorDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function FindContractorDialog({ open, onClose, initialPostal }: { open: boolean; onClose: () => void; initialPostal?: string }) {
   const requestQuotes = useStudio((s) => s.requestQuotes);
   const [postal, setPostal] = useState('');
   const [radius, setRadius] = useState(50);
@@ -484,13 +514,17 @@ export function FindContractorDialog({ open, onClose }: { open: boolean; onClose
     if (!open) return;
     setDone(null); setErrors([]);
     if (!consentText) void api.me().then((m) => setConsentText(m.texts.quote)).catch(() => {});
+    const per = useStudio.getState().person;
+    if (per && !contact.name) setContact((c) => ({ ...c, name: per.firstName }));
+    // kod pocztowy wpisany w kroku 3 → od razu wyniki
+    if (initialPostal && initialPostal.length === 6) { setPostal(initialPostal); void runSearch(undefined, radius, initialPostal); }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runSearch = async (e?: React.FormEvent, r = radius) => {
+  const runSearch = async (e?: React.FormEvent, r = radius, code = postal) => {
     e?.preventDefault();
     setSearching(true); setSearchErr(null);
     try {
-      const res = await api.nearby(postal, r);
+      const res = await api.nearby(code, r);
       setSearch(res);
       // domyślnie zaznaczeni ci, którzy deklarują dojazd w Twój rejon
       setPicked(new Set(res.results.filter((c) => c.servesArea).map((c) => c.id)));
@@ -611,5 +645,40 @@ export function FindContractorDialog({ open, onClose }: { open: boolean; onClose
         </>
       )}
     </Modal>
+  );
+}
+
+// ---------------- dolny pasek CTA ----------------
+
+/** „Zapisz projekt i znajdź wykonawców”: na desktopie przyklejony u dołu panelu, na telefonie po schowaniu nagłówka. */
+export function CtaBar({ variant }: { variant: 'panel' | 'mobile' }) {
+  const role = useStudio((s) => s.role);
+  const hidden = useStudio((s) => s.chromeHidden);
+  const setShareOpen = useStudio((s) => s.setShareOpen);
+  if (role !== 'local' && role !== 'owner') return null;
+  const button = (
+    <button type="button" data-testid={variant === 'panel' ? 'cta-find' : 'cta-find-mobile'} onClick={() => setShareOpen(true)} className="shrink-0 rounded-full bg-ink px-4 py-2.5 text-[12.5px] font-medium text-white shadow-sm hover:bg-ink/85">
+      Zapisz projekt i znajdź wykonawców
+    </button>
+  );
+  if (variant === 'panel') {
+    return (
+      <div className="sticky bottom-0 z-10 mt-auto hidden border-t border-line bg-panel/95 px-4 py-3 backdrop-blur md:block" data-testid="cta-bar">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-oak">Bezpłatnie</div>
+        <div className="mb-2 text-[13px] font-medium leading-tight">Porównaj wyceny wykonawców z okolicy</div>
+        <div className="[&>button]:w-full">{button}</div>
+      </div>
+    );
+  }
+  return (
+    <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] backdrop-blur transition-transform duration-300 md:hidden ${hidden ? 'translate-y-0' : 'translate-y-full'}`} data-testid="cta-bar-mobile" aria-hidden={!hidden}>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-oak">Bezpłatnie</div>
+          <div className="text-[11.5px] font-medium">Wyceny z okolicy</div>
+        </div>
+        <button type="button" data-testid="cta-find-mobile" onClick={() => setShareOpen(true)} className="shrink-0 rounded-full bg-ink px-3.5 py-2.5 text-[12px] font-medium text-white">Zapisz projekt i znajdź wykonawców</button>
+      </div>
+    </div>
   );
 }

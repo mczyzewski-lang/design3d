@@ -280,8 +280,9 @@ test('numer telefonu: kod SMS (tryb testowy), błędny kod, projekty dostępne n
 
   const dev1 = browser();
   const p = await dev1('/projects', { method: 'POST', body: { name: 'Mój dom', config: CFG } });
-  assert.equal((await dev1('/phone/start', { method: 'POST', body: { phone: 'abc' } })).status, 400);
-  const s1 = await dev1('/phone/start', { method: 'POST', body: { phone: '601 222 333' } });
+  assert.equal((await dev1('/phone/start', { method: 'POST', body: { phone: 'abc', firstName: 'Anna', lastName: 'Kowalska', consent: true } })).status, 400);
+  assert.equal((await dev1('/phone/start', { method: 'POST', body: { phone: '601 222 333', firstName: 'Anna', lastName: 'Kowalska' } })).status, 400, 'bez zgody');
+  const s1 = await dev1('/phone/start', { method: 'POST', body: { phone: '601 222 333', firstName: 'Anna', lastName: 'Kowalska', consent: true } });
   assert.equal(s1.status, 200);
   assert.equal(s1.body.test, true, 'bez SMSAPI_TOKEN — tryb testowy');
   assert.match(s1.body.testCode, /^\d{6}$/);
@@ -290,6 +291,8 @@ test('numer telefonu: kod SMS (tryb testowy), błędny kod, projekty dostępne n
   const ok = await dev1('/phone/verify', { method: 'POST', body: { phone: '601222333', code: s1.body.testCode } });
   assert.equal(ok.status, 200);
   assert.equal((await dev1('/me')).body.phone, '+48601222333');
+  assert.deepEqual((await dev1('/me')).body.person, { firstName: 'Anna', lastName: 'Kowalska' });
+  assert.match(get(`SELECT consent_text FROM studio_phones WHERE phone = '+48601222333'`)!.consent_text, /wykonawcom/);
   assert.equal(get(`SELECT owner_phone FROM studio_projects WHERE id = ?`, p.body.id)!.owner_phone, '+48601222333');
   // kod jednorazowy
   assert.equal((await dev1('/phone/verify', { method: 'POST', body: { phone: '601222333', code: s1.body.testCode } })).status, 400);
@@ -297,7 +300,7 @@ test('numer telefonu: kod SMS (tryb testowy), błędny kod, projekty dostępne n
   // drugie urządzenie: ten sam numer → dostęp do projektu
   const dev2 = browser();
   assert.equal((await dev2(`/projects/${p.body.id}`)).status, 403);
-  const s2 = await dev2('/phone/start', { method: 'POST', body: { phone: '+48601222333' } });
+  const s2 = await dev2('/phone/start', { method: 'POST', body: { phone: '+48601222333', firstName: 'Anna', lastName: 'Kowalska', consent: true } });
   const v2 = await dev2('/phone/verify', { method: 'POST', body: { phone: '+48601222333', code: s2.body.testCode } });
   assert.equal(v2.status, 200);
   assert.ok(v2.body.claimed >= 1);
@@ -314,5 +317,42 @@ test('limity są osobne: zdarzenia i wyszukiwania nie blokują rejestracji ani k
   for (let i = 0; i < 8; i++) await z('/contractors/nearby?postal=31-500');
   const reg = await z('/contractors', { method: 'POST', body: { firstName: 'Limit', lastName: 'Test', email: 'limit@schody.pl', phone: '606 000 000', postalCode: '31-500', radiusKm: 30, leads: true } });
   assert.equal(reg.status, 201);
-  assert.equal((await z('/phone/start', { method: 'POST', body: { phone: '606000000' } })).status, 200);
+  assert.equal((await z('/phone/start', { method: 'POST', body: { phone: '606000000', firstName: 'Ola', lastName: 'Nowak', consent: true } })).status, 200);
+});
+
+test('panel wykonawcy: wyceny z tagiem „nowe”, kontakty inwestora, status/kwota, profil', async () => {
+  (await import('../src/studio/routes.ts')).resetRateLimits();
+  // inwestor z numerem tworzy projekt, udostępnia i zgłasza „Znajdź wykonawców” do wybranej firmy
+  const inv = browser();
+  const p = await inv('/projects', { method: 'POST', body: { name: 'Schody Kasi', config: { ...CFG, stairs: { shape: 'U' } } } });
+  const st = await inv('/phone/start', { method: 'POST', body: { phone: '607 111 222', firstName: 'Katarzyna', lastName: 'Lis', consent: true } });
+  await inv('/phone/verify', { method: 'POST', body: { phone: '607111222', code: st.body.testCode } });
+  await inv(`/projects/${p.body.id}/share`, { method: 'POST' });
+  const firm = browser();
+  assert.equal((await firm('/contractor/overview')).status, 401);
+  await firm('/contractors', { method: 'POST', body: { firstName: 'Marek', lastName: 'Stal', companyName: 'Schody Stal-Drew', email: 'marek@staldrew.pl', phone: '608 000 111', postalCode: '31-500', radiusKm: 40, leads: true } });
+  const fid = get(`SELECT id FROM studio_contractors WHERE email = 'marek@staldrew.pl'`)!.id;
+  const q = await inv(`/projects/${p.body.id}/quote-request`, { method: 'POST', body: { name: 'Katarzyna', phone: '607111222', postalCode: '31-500', consent: true, contractorIds: [fid] } });
+  assert.equal(q.body.selected, 1);
+  const ov = await firm('/contractor/overview');
+  assert.equal(ov.status, 200);
+  assert.equal(ov.body.me.companyName, 'Schody Stal-Drew');
+  const item = ov.body.quotes.find((x: any) => x.projectId === p.body.id);
+  assert.ok(item, 'projekt wybrany przez inwestora jest w wycenach firmy');
+  assert.equal(item.title, 'Schody U — 31-500');
+  assert.equal(item.owner.name, 'Katarzyna Lis');
+  assert.equal(item.owner.phone, '+48607111222');
+  assert.equal(item.isNew, true);
+  assert.ok(item.token);
+  assert.equal(ov.body.contacts[0].name, 'Katarzyna Lis');
+  // obejrzenie zdejmuje „nowe”; status i kwota
+  assert.equal((await firm(`/contractor/quotes/${p.body.id}/viewed`, { method: 'POST' })).status, 200);
+  assert.equal((await firm(`/contractor/quotes/${p.body.id}`, { method: 'PUT', body: { status: 'sent', amount: '28 500,50'.replace(' ', ''), note: 'Termin 6 tyg.' } })).status, 200);
+  const ov2 = await firm('/contractor/overview');
+  const it2 = ov2.body.quotes.find((x: any) => x.projectId === p.body.id);
+  assert.deepEqual([it2.isNew, it2.status, it2.amount, it2.note], [false, 'sent', 28500.5, 'Termin 6 tyg.']);
+  assert.equal((await firm(`/contractor/quotes/nieistnieje`, { method: 'PUT', body: { status: 'won' } })).status, 404);
+  // profil
+  assert.equal((await firm('/contractor/me', { method: 'PATCH', body: { companyName: 'Stal-Drew Kraków', phone: '608000111', leads: true, postalCode: '30-001', radiusKm: 60 } })).status, 200);
+  assert.equal((await firm('/contractor/overview')).body.me.radiusKm, 60);
 });

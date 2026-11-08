@@ -8,9 +8,9 @@ import type { EntryDir, SideMode, WallKey } from '../engine/types';
 import { useConfig, useSolved, useStore } from '../store/store';
 import { woodSwatch } from '../three/woodCanvas';
 import { AnalysisCard } from './AnalysisCard';
-import { CommentsCard, FindContractorCard } from '../studio/StudioUI';
+import { CommentsCard, CtaBar } from '../studio/StudioUI';
 import { Choices, Field, GroupLabel, Section, Segmented, SliderField, Thumb, Toggle } from './controls';
-import { LED_MODES } from '../engine/led';
+import { LED_MODES, ledModeOf, ledModesAvailable } from '../engine/led';
 import { RailingThumb, ShapeThumb, StepStyleThumb, StructureThumb } from './thumbs';
 
 // domyślny profil i rozstaw przy zmianie typu balustrady
@@ -26,29 +26,31 @@ export function Panel() {
   const [open, setOpen] = useState<number>(1);
   const t = (i: number) => setOpen(open === i ? 0 : i);
   const c = useConfig();
+  const solvedTop = useSolved();
   const S = (i: number, title: string, el: ReactNode, value?: string, testId?: string) => (
     <Section index={i} title={title} open={open === i} onToggle={() => t(i)} value={value} testId={testId}>{el}</Section>
   );
   const style = stepStyleOf(c);
   return (
-    <aside className="flex flex-col bg-panel scrollbar-thin md:h-full md:overflow-y-auto" data-testid="panel">
-      <AnalysisCard />
-      <FindContractorCard />
+    <aside className="flex flex-col bg-panel pb-20 scrollbar-thin md:h-full md:overflow-y-auto md:pb-0" data-testid="panel">
       <CommentsCard />
       <GroupLabel hint="Wyklikaj wygląd — bez wpisywania wymiarów">Wygląd schodów</GroupLabel>
       {S(1, 'Typ schodów', <ShapeSection />, `${SHAPE_LABEL[c.stairs.shape].split(' (')[0]}${c.stairs.turnType === 'winders' && c.stairs.shape !== 'I' && c.stairs.shape !== 'S' ? ', zabiegowe' : ''}`, 'sec-shape')}
       {S(2, 'Konstrukcja', <StructureSection />, c.stairs.shape === 'S' ? 'kolumna centralna' : structureSpec(c.structure.type).label, 'sec-structure')}
       {S(3, 'Styl stopni', <StepStyleSection />, c.stairs.shape === 'S' ? 'ażurowe' : STEP_STYLES.find((x) => x.key === style)?.label, 'sec-steps')}
       {S(4, 'Kolor stopni', <WoodSection />, WOODS.find((w) => w.key === c.treads.wood)?.label, 'sec-wood')}
-      {S(5, 'Balustrada', <RailingLookSection />, railingSpec(c.railing.type).label, 'sec-railing')}
-      {S(6, 'Kolor stali i wykończeń', <SteelSection />, STEEL_PRESETS.find((p) => p.key === c.steel.preset)?.label ?? 'własny kolor', 'sec-steel')}
-      {S(7, 'Oświetlenie', <LightingSection />, c.lighting.led ? `LED ${LED_MODES.find((m) => m.key === c.lighting.ledMode)?.label.toLowerCase() ?? ''}` : 'bez LED', 'sec-light')}
+      {S(5, 'Kolor stali i wykończeń', <SteelSection />, STEEL_PRESETS.find((p) => p.key === c.steel.preset)?.label ?? 'własny kolor', 'sec-steel')}
+      {S(6, 'Balustrada', <RailingLookSection />, railingSpec(c.railing.type).label, 'sec-railing')}
+      {S(7, 'Oświetlenie', <LightingSection />, c.lighting.led ? `LED ${LED_MODES.find((m) => m.key === ledModeOf(c, solvedTop))?.label.toLowerCase() ?? ''}` : 'bez LED', 'sec-light')}
       <GroupLabel hint="Dokładne wymiary — gdy znasz swoje pomieszczenie">Parametry</GroupLabel>
+      {/* analiza przy parametrach — po wyborach z „Wyglądu” schody są domyślnie poprawne */}
+      <div className="pt-3"><AnalysisCard /></div>
       {S(8, 'Wymiary klatki schodowej', <RoomSection />, `${cm(c.room.width)} × ${cm(c.room.depth)}, h ${cm(c.room.height)} cm`, 'sec-room')}
       {S(9, 'Wymiary schodów i stopni', <StairDimsSection />, undefined, 'sec-dims')}
       {S(10, 'Wymiary balustrady', <RailingDimsSection />, `${cm(c.railing.height)} cm`, 'sec-railing-dims')}
       {S(11, 'Podsumowanie', <SummarySection />, undefined, 'sec-summary')}
-      <p className="px-4 py-4 text-[11px] leading-snug text-muted">Stair Studio to narzędzie koncepcyjne. Wyniki nie są projektem konstrukcyjnym ani potwierdzeniem zgodności z przepisami.</p>
+      <p className="px-4 py-4 text-[11px] leading-snug text-muted">Konfigurator design3d schody to narzędzie koncepcyjne. Wyniki nie są projektem konstrukcyjnym ani potwierdzeniem zgodności z przepisami.</p>
+      <CtaBar variant="panel" />
     </aside>
   );
 }
@@ -267,6 +269,8 @@ function SteelSection() {
 
 function LightingSection() {
   const c = useConfig();
+  const solved = useSolved();
+  const avail = ledModesAvailable(c, solved);
   const setLighting = useStore((s) => s.setLighting);
   const L = c.lighting;
   return (
@@ -277,8 +281,9 @@ function LightingSection() {
       <Toggle label="Oświetlenie LED schodów" checked={L.led} onChange={(v) => setLighting({ led: v })} />
       {L.led && c.stairs.shape !== 'S' && (
         <Field label="Rodzaj oświetlenia">
-          <Segmented value={L.ledMode} onChange={(v) => setLighting({ ledMode: v })} size="sm" options={LED_MODES.map((m) => ({ value: m.key, label: <span data-testid={`led-${m.key}`}>{m.label}</span>, title: m.hint }))} />
-          <p className="mt-1 text-[11px] text-muted">{LED_MODES.find((m) => m.key === L.ledMode)?.hint}</p>
+          <Segmented value={ledModeOf(c, solved)} onChange={(v) => { if (avail[v]) setLighting({ ledMode: v }); }} size="sm" options={LED_MODES.map((m) => ({ value: m.key, label: <span data-testid={`led-${m.key}`} className={avail[m.key] ? '' : 'line-through opacity-40'}>{m.label}</span>, title: avail[m.key] ? m.hint : 'Przy szklanej balustradzie bez ściany obok biegu — niedostępne' }))} />
+          <p className="mt-1 text-[11px] text-muted">{LED_MODES.find((m) => m.key === ledModeOf(c, solved))?.hint}</p>
+          {(!avail.spots || !avail.along) && <p className="mt-1 text-[11px] text-warn" data-testid="led-glass-note">Przy szklanej balustradzie oprawy punktowe i profil wzdłuż biegu są możliwe tylko przy ścianie — tu zostaje taśma pod noskami.</p>}
         </Field>
       )}
       {L.led && (

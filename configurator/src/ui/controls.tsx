@@ -97,7 +97,7 @@ export function Section({ index, title, open, onToggle, children, value, testId 
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [open]);
   return (
-    <div ref={ref} className="scroll-mt-[max(46vh,300px)] border-t border-line md:scroll-mt-0" data-testid={testId}>
+    <div ref={ref} className="scroll-mt-[var(--scene-h,46vh)] border-t border-line md:scroll-mt-0" data-testid={testId}>
       <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line text-[10.5px] text-muted">{index}</span>
         <span className="flex-1 text-[13px] font-medium tracking-tight">{title}</span>

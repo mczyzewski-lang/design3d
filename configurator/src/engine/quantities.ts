@@ -113,7 +113,7 @@ export function quantities(c: Config, s: Solved): QtyItem[] {
     items.push({ group: 'Balustrada', name: 'Uchwyty ścienne', qty: wallRail.reduce((a, p) => a + (p.wallBrackets?.length ?? 0), 0), unit: 'szt.' });
   }
   if (c.lighting.led) {
-    const mode = ledModeOf(c);
+    const mode = ledModeOf(c, s);
     const tt = style === 'blocks' ? s.calc.rise - 0.014 : t;
     if (mode === 'nosing') items.push({ group: 'Oświetlenie', name: `Taśma LED pod noskami ${c.lighting.ledTemp} K + profil`, qty: r2(L.flights.reduce((a, f) => a + f.treads * f.width, 0) + (L.winder ? L.winder.treads.length * L.flights[0].width : 0) + (L.landing ? L.landing.rect.maxX - L.landing.rect.minX : 0)), unit: 'mb' });
     if (mode === 'spots') items.push({ group: 'Oświetlenie', name: `Oprawy schodowe LED ${c.lighting.ledTemp} K`, qty: L.flights.reduce((a, f) => a + spotSteps(f.treads).length, 0), unit: 'szt.' });

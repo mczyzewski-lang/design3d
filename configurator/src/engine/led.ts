@@ -9,8 +9,23 @@ export const LED_MODES: Array<{ key: LedMode; label: string; hint: string }> = [
   { key: 'along', label: 'Wzdłuż schodów', hint: 'Ciągły profil LED równoległy do biegu — w ścianie ok. 25 cm nad noskami albo na boku konstrukcji.' },
 ];
 
-/** Schody kręcone mają tylko taśmę pod noskami. */
-export const ledModeOf = (c: Pick<Config, 'stairs' | 'lighting'>): LedMode => (c.stairs.shape === 'S' ? 'nosing' : c.lighting.ledMode ?? 'nosing');
+/**
+ * Które tryby są możliwe. Przy szklanej balustradzie oprawy punktowe i profil wzdłuż biegu byłyby za szkłem
+ * (w czołach stopnic / na boku konstrukcji) — dopuszczamy je tylko, gdy każdy bieg ma ścianę obok.
+ */
+export function ledModesAvailable(c: Config, s: { layout: { flights: FlightEl[]; spiral: unknown } }): Record<LedMode, boolean> {
+  if (c.stairs.shape === 'S' || s.layout.spiral) return { nosing: true, spots: false, along: false };
+  if (c.railing.type !== 'glass') return { nosing: true, spots: true, along: true };
+  const wall = s.layout.flights.length > 0 && s.layout.flights.every((f) => flightLed(c, f, c.stairs.treadThickness).nearWall);
+  return { nosing: true, spots: wall, along: wall };
+}
+
+/** Skuteczny tryb: wybrany, o ile jest możliwy — inaczej taśma pod noskami. */
+export function ledModeOf(c: Config, s?: { layout: { flights: FlightEl[]; spiral: unknown } }): LedMode {
+  if (c.stairs.shape === 'S') return 'nosing';
+  const m = c.lighting.ledMode ?? 'nosing';
+  return s && !ledModesAvailable(c, s)[m] ? 'nosing' : m;
+}
 
 /** Stopnie z oprawą punktową: co drugi, zawsze także ostatni. */
 export function spotSteps(treads: number): number[] {

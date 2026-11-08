@@ -28,7 +28,7 @@ export interface StairGeometry {
 
 /** Klucz geometrii schodów — bez materiałów (zmiana drewna/koloru nie przebudowuje). */
 export function stairGeometryKey(c: Config, s: Solved): string {
-  return JSON.stringify([s.key, c.structure.type, c.structure.landingSupport, c.structure.closedRisers, c.treads.edge, stepStyleOf(c), ledModeOf(c)]);
+  return JSON.stringify([s.key, c.structure.type, c.structure.landingSupport, c.structure.closedRisers, c.treads.edge, stepStyleOf(c), ledModeOf(c, s), c.railing.type === 'glass']);
 }
 
 
@@ -392,7 +392,7 @@ export function buildStairGeometry(c: Config, s: Solved): StairGeometry {
   const P = new Parts();
   const postsOut: PostInfo[] = [];
   const style = stepStyleOf(c);
-  const ctx: Ctx = { c, s, P, style, t: style === 'blocks' ? s.calc.rise - 0.014 : c.stairs.treadThickness, /* klocki: 14 mm cienia nad płytą kotwiącą */ nz: c.stairs.nosing, rounded: c.treads.edge === 'rounded' ? 0.008 : 0, uvSeed: 0, postsOut, nosingLed: ledModeOf(c) === 'nosing' };
+  const ctx: Ctx = { c, s, P, style, t: style === 'blocks' ? s.calc.rise - 0.014 : c.stairs.treadThickness, /* klocki: 14 mm cienia nad płytą kotwiącą */ nz: c.stairs.nosing, rounded: c.treads.edge === 'rounded' ? 0.008 : 0, uvSeed: 0, postsOut, nosingLed: ledModeOf(c, s) === 'nosing' };
   const meta: StairMeta = { structure: c.structure.type, elements: 0, steelElements: 0, woodElements: 0, posts: postsOut, continuousBeams: 0, landingFrame: false, wallAnchors: 0, tags: P.counts };
   if (s.layout.spiral) buildSpiral(ctx, meta);
   for (const f of s.layout.flights) buildFlight(ctx, f);

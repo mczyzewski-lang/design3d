@@ -33,11 +33,18 @@ interface StudioState {
   /** okno „Zapisz i udostępnij” (otwierane z nagłówka i z karty „Znajdź wykonawców”) */
   shareOpen: boolean;
   setShareOpen: (v: boolean) => void;
+  /** panel wykonawcy (CRM) zamiast widoku 3D — dla firmy po wejściu z linku albo pod /konfigurator/firma */
+  crm: boolean;
+  setCrm: (v: boolean) => void;
+  /** telefon: nagłówek schowany po przewinięciu w dół → pokazujemy dolny pasek CTA */
+  chromeHidden: boolean;
+  /** dane osoby przypisanej do numeru (do formularzy) */
+  person: { firstName: string; lastName: string } | null;
   /** potwierdzony numer telefonu tej przeglądarki („logowanie numerem”) */
   phone: string | null;
   loadMe: () => Promise<void>;
   /** wysyła kod SMS; w trybie testowym (brak bramki) zwraca kod do pokazania */
-  startPhone: (phone: string) => Promise<{ error: string } | { phone: string; testCode?: string }>;
+  startPhone: (form: { phone: string; firstName: string; lastName: string; consent: boolean }) => Promise<{ error: string } | { phone: string; testCode?: string }>;
   verifyPhone: (phone: string, code: string) => Promise<string | null>;
   projectId: string | null;
   name: string;
@@ -105,12 +112,24 @@ export const useStudio = create<StudioState>((set, get) => ({
   phone: null,
   shareOpen: false,
   setShareOpen: (v) => set({ shareOpen: v }),
-  loadMe: async () => {
-    try { set({ phone: (await api.me()).phone }); } catch { /* offline */ }
+  chromeHidden: false,
+  crm: false,
+  setCrm: (v) => {
+    set({ crm: v });
+    // adres odzwierciedla widok: ?view=3d = projekt w 3D
+    const u = new URL(location.href);
+    if (v) u.searchParams.delete('view'); else u.searchParams.set('view', '3d');
+    history.replaceState(null, '', u.pathname + u.search + u.hash);
+    const pid = get().projectId;
+    if (!v && get().role === 'contractor' && pid) void api.crmViewed(pid).catch(() => {});
   },
-  startPhone: async (phone) => {
+  person: null,
+  loadMe: async () => {
+    try { const m = await api.me(); set({ phone: m.phone, person: m.person }); } catch { /* offline */ }
+  },
+  startPhone: async (form) => {
     try {
-      const r = await api.phoneStart(phone);
+      const r = await api.phoneStart(form);
       return { phone: r.phone, testCode: r.testCode };
     } catch (e) {
       return { error: (e as Error).message };
@@ -120,6 +139,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     try {
       const r = await api.phoneVerify(phone, code);
       set({ phone: r.phone });
+      void get().loadMe();
       void get().refreshProjects();
       return null;
     } catch (e) {
@@ -129,6 +149,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   init: async () => {
     void get().loadMe();
+    if (/^\/konfigurator\/firma\/?$/.test(location.pathname)) { set({ crm: true }); return; }
     const m = /\/konfigurator\/p\/([A-Za-z0-9_-]+)/.exec(location.pathname);
     try {
       if (m) {
@@ -140,7 +161,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           await get().openProject(sh.projectId);
           set({ shareToken: token });
         } else if (sh.role === 'contractor') {
-          set({ role: 'contractor', viewerName: sh.viewer?.name ?? null });
+          set({ role: 'contractor', viewerName: sh.viewer?.name ?? null, projectId: sh.projectId ?? null, crm: new URLSearchParams(location.search).get('view') !== '3d' });
           await get().loadComments();
         } else {
           set({ role: 'none', gate: { token, name: sh.name, consentText: sh.consentText, leadsText: sh.leadsText, thumb: sh.thumbnail ? api.thumbnailUrl(token, sh.thumbnail) : null } });
@@ -252,7 +273,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (!g) return null;
     try {
       const r = await api.registerContractor(g.token, form, shareVia());
-      set({ role: 'contractor', viewerName: r.viewer.name, gate: null });
+      // po rejestracji: panel wykonawcy z tym projektem jako nową wyceną
+      set({ role: 'contractor', viewerName: r.viewer.name, gate: null, crm: true });
+      void api.getShare(g.token).then((sh) => set({ projectId: sh.projectId ?? null })).catch(() => {});
       useStore.getState().setView({ spin: false });
       await get().loadComments();
       return null;

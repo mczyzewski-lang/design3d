@@ -6,7 +6,7 @@ import { Parts, cyl, extrudeZY, flightMatrix, type P2 } from './primitives';
 
 /** Oprawy punktowe / profil wzdłuż biegu (taśma pod noskami powstaje razem ze stopnicami). */
 export function buildLedFixtures(P: Parts, c: Config, s: Solved, t: number): void {
-  const mode = ledModeOf(c);
+  const mode = ledModeOf(c, s);
   for (const f of s.layout.flights) {
     const m = flightMatrix(f);
     const led = flightLed(c, f, t);
@@ -46,7 +46,7 @@ export function ledLightPositions(c: Config, s: Solved, t: number): Array<[numbe
     }
     return out;
   }
-  const mode = ledModeOf(c);
+  const mode = ledModeOf(c, s);
   for (const f of s.layout.flights) {
     const m = flightMatrix(f);
     const k = f.rise / f.going;

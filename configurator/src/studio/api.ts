@@ -10,6 +10,14 @@ export interface ContractorForm { firstName: string; lastName: string; companyNa
 export interface QuoteForm { name: string; email: string; phone: string; postalCode: string; radiusKm: string; consent: boolean; contractorIds: number[] }
 export interface NearbyContractor { id: number; name: string; place: string; distanceKm: number; radiusKm: number; servesArea: boolean }
 export interface NearbyDto { origin: { code: string; place: string; precision: 'exact' | 'near' | 'area' }; radiusKm: number; results: NearbyContractor[] }
+export type QuoteStatus = 'new' | 'in_progress' | 'sent' | 'won' | 'lost';
+export interface CrmQuote {
+  projectId: string; token: string | null; projectName: string; title: string; shape: string; postalCode: string | null;
+  owner: { name: string; phone: string | null; email: string | null }; receivedAt: string; lastOpenedAt: string; comments: number;
+  status: QuoteStatus; amount: number | null; note: string | null; isNew: boolean; updatedAt: string | null;
+}
+export interface CrmMe { firstName: string; lastName: string; companyName: string | null; email: string; phone: string; postalCode: string | null; radiusKm: number | null; leads: boolean; listed: boolean; since: string }
+export interface CrmOverview { me: CrmMe; quotes: CrmQuote[]; contacts: Array<{ name: string; phone: string | null; email: string | null; quotes: number; last: string }>; leadsText: string }
 export interface ProjectListItem { id: string; name: string; current_version: number; updated_at: string }
 
 export class ApiError extends Error {
@@ -54,8 +62,12 @@ export const api = {
   quoteRequest: (id: string, form: QuoteForm) =>
     call<{ ok: true; nearby: number; selected: number }>(`/projects/${id}/quote-request`, 'POST', form),
   nearby: (postal: string, radius: number) => call<NearbyDto>(`/contractors/nearby?postal=${encodeURIComponent(postal)}&radius=${radius}`),
-  me: () => call<{ owner: boolean; phone: string | null; smsTest: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string } }>('/me'),
-  phoneStart: (phone: string) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/phone/start', 'POST', { phone }),
+  crmOverview: () => call<CrmOverview>('/contractor/overview'),
+  crmUpdateMe: (b: { companyName: string; phone: string; postalCode: string; radiusKm: string; leads: boolean }) => call<{ ok: true }>('/contractor/me', 'PATCH', b),
+  crmUpdateQuote: (projectId: string, b: { status?: QuoteStatus; amount?: string | number | null; note?: string }) => call<{ ok: true }>(`/contractor/quotes/${projectId}`, 'PUT', b),
+  crmViewed: (projectId: string) => call<{ ok: true }>(`/contractor/quotes/${projectId}/viewed`, 'POST'),
+  me: () => call<{ owner: boolean; phone: string | null; person: { firstName: string; lastName: string } | null; smsTest: boolean; contractor: { name: string; email: string } | null; texts: { consent: string; leads: string; quote: string; phone: string } }>('/me'),
+  phoneStart: (form: { phone: string; firstName: string; lastName: string; consent: boolean }) => call<{ ok: true; phone: string; test: boolean; testCode?: string }>('/phone/start', 'POST', form),
   phoneVerify: (phone: string, code: string) => call<{ ok: true; phone: string; claimed: number }>('/phone/verify', 'POST', { phone, code }),
   comments: (ref: { projectId?: string | null; shareToken?: string | null; owner: boolean }) =>
     call<CommentDto[]>(ref.owner && ref.projectId ? `/projects/${ref.projectId}/comments` : `/shares/${ref.shareToken}/comments`),

@@ -148,3 +148,15 @@ CREATE TABLE IF NOT EXISTS studio_otp (
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_studio_otp_phone ON studio_otp(phone, id);
+
+-- panel wykonawcy (CRM): status i kwota wyceny dla projektu
+CREATE TABLE IF NOT EXISTS studio_contractor_quotes (
+  contractor_id INTEGER NOT NULL REFERENCES studio_contractors(id) ON DELETE CASCADE,
+  project_id    TEXT NOT NULL REFERENCES studio_projects(id) ON DELETE CASCADE,
+  status        TEXT NOT NULL DEFAULT 'new',   -- new | in_progress | sent | won | lost
+  amount        REAL,
+  note          TEXT,
+  viewed_at     TEXT,
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (contractor_id, project_id)
+);

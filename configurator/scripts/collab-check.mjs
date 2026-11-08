@@ -65,8 +65,12 @@ await o.screenshot({ path: `${out}/1-wlasciciel-komentarz.png` });
 await o.click('[data-testid="save-share"]');
 await o.waitForSelector('[data-testid="step-phone"]');
 ok((await o.locator('[data-testid="open-find"]').isDisabled()) && (await o.locator('[data-testid="share-url"]').count()) === 0, 'kroki 2 i 3 widoczne, ale nieaktywne przed potwierdzeniem numeru');
+await o.fill('[data-testid="person-first"]', 'Katarzyna');
+await o.fill('[data-testid="person-last"]', 'Kowalska');
 // losowy numer: limit 3 kodów na numer / 10 min nie blokuje kolejnych przebiegów
 await o.fill('[data-testid="phone-input"]', `6${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`);
+ok(await o.locator('[data-testid="phone-send"]').isDisabled(), 'bez zgody nie da się wysłać kodu (zgoda pojawia się po wpisaniu numeru)');
+await o.check('[data-testid="phone-consent"]');
 await o.click('[data-testid="phone-send"]');
 await o.waitForSelector('[data-testid="phone-test-code"]');
 const testCode = (await o.textContent('[data-testid="phone-test-code"] b')).trim();
@@ -87,10 +91,9 @@ ok(sms.startsWith('sms:') && decodeURIComponent(sms).includes(shareUrl), 'udost�
 await o.screenshot({ path: `${out}/2-udostepnij.png` });
 
 // ---- krok 3: znajdź wykonawców z okolicy ----
+await o.fill('[data-testid="step-postal"]', '30061'); // kod pocztowy montażu od razu w kroku 3
 await o.click('[data-testid="open-find"]');
-await o.fill('[data-testid="quote-postal"]', '30061');
-await o.click('[data-testid="quote-search"]');
-await o.waitForSelector('[data-testid="nearby-results"]');
+await o.waitForSelector('[data-testid="nearby-results"]'); // wyniki od razu, bez ponownego wpisywania
 const rows = await o.locator('[data-testid="nearby-row"]').count();
 ok(/Kraków/.test(await o.textContent('[data-testid="nearby-results"]')), `tabela wykonawców w promieniu 50 km od 30-061 (Kraków), wierszy: ${rows}`);
 await o.fill('[data-testid="quote-name"]', 'Anna');
@@ -139,7 +142,21 @@ ok(/zgod/i.test(await f.textContent('[data-testid="gate-errors"]')), 'bez zgody 
 await f.check('[data-testid="gate-consent"]');
 await f.click('[data-testid="gate-submit"]');
 await f.waitForSelector('[data-testid="share-gate"]', { state: 'detached' });
-ok(true, 'po rejestracji: „Zobacz i wyceń projekt schodów” otwiera projekt');
+// po rejestracji: panel wykonawcy (CRM) z tym projektem jako nową wyceną
+await f.waitForSelector('[data-testid="crm"]');
+await f.waitForSelector('[data-testid="crm-quote"]');
+ok((await f.locator('[data-testid="crm-new-tag"]').count()) >= 1, 'po rejestracji: panel wykonawcy, wycena z tagiem „Nowe”');
+ok(/^Schody (U|L|kręcone|proste) — /.test((await f.textContent('[data-testid="crm-quote-title"]')).trim()), `nazwa wyceny: ${(await f.textContent('[data-testid="crm-quote-title"]')).trim()}`);
+ok(/Katarzyna Kowalska/.test(await f.textContent('[data-testid="crm-quote"]')), 'pod wyceną imię i nazwisko inwestora');
+for (const t of ['contacts', 'contracts', 'calendar', 'email', 'profile']) await f.click(`[data-testid="crm-tab-${t}"]`);
+ok((await f.locator('[data-testid="crm-logo"] >> text=Pro').count()) > 0, 'zakładki CRM: kontakty, umowy, kalendarz, e-mail, profil (logo — opcja Pro)');
+await f.screenshot({ path: `${out}/4b-crm.png` });
+await f.click('[data-testid="crm-tab-quotes"]');
+if (!(await f.locator('[data-testid="crm-open-project"]').count())) await f.click('[data-testid="crm-quote"] >> nth=0 >> button >> nth=0');
+await f.click('[data-testid="crm-open-project"]');
+await f.waitForURL(/view=3d/);
+await f.waitForSelector('canvas', { timeout: 90000 });
+ok(true, 'z wyceny: „Otwórz projekt 3D i wymiary”');
 await f.waitForSelector('.pin-label.pin-owner');
 await f.click('[data-testid="comments-toggle"]'); // lista komentarzy jest domyślnie zwinięta
 ok((await f.locator('text=Czy tu może być szkło').count()) > 0, 'firma widzi komentarz właściciela');

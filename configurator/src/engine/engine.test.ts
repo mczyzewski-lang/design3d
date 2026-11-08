@@ -344,3 +344,23 @@ describe('zmiana układu ze stanu standardowego — bez błędów', async () => 
     expect([config.room.width, config.room.depth]).toEqual([2.9, 4.2]);
   });
 });
+
+describe('LED przy szklanej balustradzie', async () => {
+  const { ledModeOf, ledModesAvailable } = await import('./led');
+  test('bez ściany obok biegu: oprawy punktowe i profil wzdłuż niedostępne → taśma pod noskami', () => {
+    const c = cloneConfig(DEFAULT_CONFIG);
+    c.railing.type = 'glass';
+    c.room.walls = { back: false, front: false, left: false, right: false };
+    c.lighting.ledMode = 'spots';
+    const s = solve(c);
+    expect(ledModesAvailable(c, s)).toEqual({ nosing: true, spots: false, along: false });
+    expect(ledModeOf(c, s)).toBe('nosing');
+  });
+  test('balustrada z prętów: wszystkie tryby dostępne', () => {
+    const c = cloneConfig(DEFAULT_CONFIG);
+    c.lighting.ledMode = 'along';
+    const s = solve(c);
+    expect(ledModesAvailable(c, s).along).toBe(true);
+    expect(ledModeOf(c, s)).toBe('along');
+  });
+});
