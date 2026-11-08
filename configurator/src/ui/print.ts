@@ -39,7 +39,7 @@ export function openPrintView(c: Config, image: string | null, link: string): bo
   @media print{body{margin:12mm}.noprint{display:none}}
 </style></head><body>
 <button class="noprint" onclick="print()" style="float:right;padding:6px 12px">Drukuj / zapisz PDF</button>
-<h1>STAIR STUDIO</h1><div class="muted">design3d.pl · karta projektu · ${esc(new Date().toLocaleDateString('pl-PL'))}</div>
+<img src="${location.origin}/konfigurator/brand/design3d-schody-logo.svg" alt="design3d schody" style="height:28px;width:auto;margin:0 0 6px;border:0;border-radius:0"><div class="muted">design3d.pl · karta projektu · ${esc(new Date().toLocaleDateString('pl-PL'))}</div>
 ${image ? `<img src="${esc(image)}" alt="Wizualizacja schodów">` : ''}
 <div class="cols"><div><h2>Parametry</h2><table>${rows.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>
 ${issues.length ? `<h2>Uwagi</h2><ul>${issues.map((m) => `<li><b>${esc(m.title)}</b> ${esc(m.cause)}</li>`).join('')}</ul>` : ''}</div>

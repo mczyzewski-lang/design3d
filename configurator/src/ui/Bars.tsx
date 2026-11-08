@@ -30,10 +30,9 @@ export function TopBar() {
   const [toast, toastNode] = useToast();
   return (
     <header className="relative z-30 flex h-14 shrink-0 items-center gap-1 border-b border-line bg-panel/90 px-3 backdrop-blur sm:gap-2 sm:px-4">
-      <div className="mr-1 flex items-baseline gap-2 sm:mr-3">
-        <span className="whitespace-nowrap text-[12px] font-semibold tracking-[0.1em] sm:text-[15px] sm:tracking-[0.22em]">STAIR STUDIO</span>
-        <span className="hidden text-[11px] text-muted sm:inline">design3d.pl</span>
-      </div>
+      <a href="/" className="mr-1 flex shrink-0 items-center sm:mr-3" aria-label="design3d schody — strona główna" data-testid="brand-logo">
+        <img src={`${import.meta.env.BASE_URL}brand/design3d-schody-logo.svg`} alt="design3d schody" width={361} height={64} className="h-[22px] w-auto sm:h-7" />
+      </a>
       {/* menu „Kolekcje” i „Plik” (pobieranie plików) tymczasowo ukryte — patrz README */}
       <div className="flex-1" />
       <ProjectActions toast={toast} />

@@ -375,7 +375,7 @@ export function ShareGate() {
         )}
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Stair Studio · design3d.pl</div>
+            <img src={`${import.meta.env.BASE_URL}brand/design3d-schody-logo.svg`} alt="design3d schody" className="h-5 w-auto" />
             <div className="mt-1 text-[19px] font-semibold leading-tight">Udostępniono Ci projekt schodów</div>
             <div className="mt-0.5 truncate text-[13px] text-muted">„{gate.name}”</div>
           </div>
