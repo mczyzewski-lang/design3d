@@ -26,40 +26,76 @@ export function woodTextures(key: WoodKey): { map: THREE.CanvasTexture; bump: TH
   return out;
 }
 
-/** Deski dębowe na posadzkę: 2,4 × 2,4 m, deski 20 cm. */
-export function floorTexture(dark = false): THREE.CanvasTexture {
-  const ck = `floor:${dark}`;
+/**
+ * Deski dębowe na posadzkę: kafel 2,4 × 2,4 m, deski 20 cm o losowych długościach (bezszwowo w obu osiach).
+ * Usłojenie liczone per piksel jak w stopnicach; osobna mapa wypukłości (słoje + fugi między deskami).
+ */
+export function floorTextures(): { map: THREE.CanvasTexture; bump: THREE.CanvasTexture } {
+  const ck = 'floor3';
   if (cache.has(ck)) return cache.get(ck);
   const S = 1024;
+  const ROWS = 12;
+  const plank = S / ROWS;
   const [c, g] = canvas(S, S);
-  const plank = S / 12;
-  const base = hex(dark ? '#a98a68' : '#cdb08a');
-  for (let r = 0; r < 12; r++) {
-    let x = -Math.floor(hash(r * 3.1) * 300);
+  const [cb, gb] = canvas(S, S);
+  const img = g.createImageData(S, S);
+  const bimg = gb.createImageData(S, S);
+  const dark = hex('#a98660');
+  const base = hex('#cbb08b');
+  const light = hex('#dcc6a3');
+  for (let r = 0; r < ROWS; r++) {
+    // podział rzędu na deski; przesunięcie rzędu, żeby styki nie wypadały w jednej linii
+    const off = Math.floor(hash(r * 3.1 + 0.7) * S);
+    const ends: number[] = [];
+    let x = 0;
     let j = 0;
     while (x < S) {
-      const len = 260 + Math.floor(hash(r * 7.3 + j * 1.7) * 420);
-      const tone = (hash(r * 11.1 + j * 5.7) - 0.5) * 30;
-      for (let yy = 0; yy < plank; yy++) {
-        const v = yy / plank;
-        for (let k = 0; k < 6; k++) {
-          const yLine = Math.round(r * plank + yy);
-          const shade = Math.sin((v * 7 + fbm((x + k * 40) / 120, r + j) * 3) * Math.PI) * 10;
-          g.fillStyle = `rgb(${base[0] + tone + shade},${base[1] + tone + shade * 0.85},${base[2] + tone + shade * 0.7})`;
-          g.fillRect(x + (k * len) / 6, yLine, len / 6 + 1, 1);
-        }
-      }
-      g.fillStyle = 'rgba(70,50,30,0.55)';
-      g.fillRect(x, r * plank, 2, plank);
-      x += len;
+      x += 300 + Math.floor(hash(r * 7.3 + j * 1.7) * 420);
+      if (S - x < 200) x = S;
+      ends.push(Math.min(S, x));
       j++;
     }
-    g.fillStyle = 'rgba(70,50,30,0.5)';
-    g.fillRect(0, r * plank, S, 2);
+    for (let px = 0; px < S; px++) {
+      const xr = (px + off) % S;
+      let seg = 0;
+      while (ends[seg] <= xr) seg++;
+      const x0 = seg ? ends[seg - 1] : 0;
+      const seed = r * 17 + seg * 5 + 1;
+      const tone = (hash(seed * 9.1) - 0.5) * 0.3;
+      const freq = 0.5 + hash(seed * 5.3) * 0.8;
+      const u = xr / S;
+      const warp = fbm(u * 2.2 + seed, seed) * 1.2; // długie, spokojne słoje (deska, nie sklejka)
+      const wob = fbm(u * 30, seed + 3) * 0.5;
+      const endGap = xr - x0 < 2;
+      for (let py = 0; py < plank; py++) {
+        const y = Math.round(r * plank) + py;
+        if (y >= S) break;
+        const v = py / plank;
+        const ring = Math.sin((v * 13 * freq + warp) * Math.PI + wob);
+        const grain = Math.pow(Math.abs(ring), 0.6);
+        const fine = (hash(px * 0.37 + y * 91.1 + seed) - 0.5) * 0.1;
+        let t = 0.5 + (grain - 0.5) * 0.2 + tone + fine;
+        if (hash(Math.floor(px / 7) * 7.7 + y * 13.3 + seed) > 0.988) t -= 0.2; // pory
+        t = Math.min(1, Math.max(0, t));
+        const gap = endGap || py < 2;
+        const k = gap ? 0.55 : py === 2 || py >= plank - 1 ? 0.9 : 1; // fuga + delikatna faza krawędzi
+        const o = (y * S + px) * 4;
+        for (let i = 0; i < 3; i++) {
+          const col = t < 0.5 ? dark[i] + (base[i] - dark[i]) * (t / 0.5) : base[i] + (light[i] - base[i]) * ((t - 0.5) / 0.5);
+          img.data[o + i] = col * k;
+        }
+        img.data[o + 3] = 255;
+        const bv = gap ? 30 : Math.round((0.55 + grain * 0.25 + fine) * 255);
+        bimg.data[o] = bimg.data[o + 1] = bimg.data[o + 2] = bv;
+        bimg.data[o + 3] = 255;
+      }
+    }
   }
-  const t = tex(c, [1 / 2.4, 1 / 2.4]);
-  cache.set(ck, t);
-  return t;
+  g.putImageData(img, 0, 0);
+  gb.putImageData(bimg, 0, 0);
+  const out = { map: tex(c, [1 / 2.4, 1 / 2.4]), bump: tex(cb, [1 / 2.4, 1 / 2.4], false) };
+  cache.set(ck, out);
+  return out;
 }
 
 /** Subtelna faktura ciepłej białej ściany: 2 × 2 m. */

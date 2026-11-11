@@ -37,14 +37,16 @@ export function Lighting({ config, solved, hq = true }: { config: Config; solved
   const ledColor = lighting.ledTemp === 2700 ? '#ffb46b' : '#ffe2c2';
   return (
     <>
-      <hemisphereLight args={[night ? '#3a4050' : '#fffaf0', night ? '#20232a' : '#d8cdbd', night ? 0.15 : 0.55]} />
+      <hemisphereLight args={[night ? '#3a4050' : '#f3f6fb', night ? '#20232a' : '#d9cfc0', night ? 0.15 : 0.58]} />
+      {/* kontra bez cieni z przeciwnej strony: wydobywa bryłę ciemnej stali i spody stopni */}
+      {!night && <directionalLight position={[W / 2 - 7, H * 0.6, D / 2 - 4]} intensity={0.45} color="#eaf0ff" />}
       <directionalLight
         ref={sun}
         castShadow
         position={[W / 2 + 6, H + 7, D / 2 + 5]}
-        intensity={night ? 0 : 2.4}
-        color="#fff4e2"
-        shadow-mapSize={[2048, 2048]}
+        intensity={night ? 0 : 2.3}
+        color="#fff8ee"
+        shadow-mapSize={hq ? [4096, 4096] : [2048, 2048]}
         shadow-radius={hq ? 3 : 2}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
@@ -54,7 +56,7 @@ export function Lighting({ config, solved, hq = true }: { config: Config; solved
       {lighting.led && night && ledLights.map((p, i) => (
         <pointLight key={i} position={p} intensity={2.6 * lighting.ledBrightness} distance={2.6} decay={2} color={ledColor} />
       ))}
-      <Environment resolution={256} environmentIntensity={night ? 0.12 : 0.75} background={false} frames={1}>
+      <Environment resolution={256} environmentIntensity={night ? 0.12 : 0.72} background={false} frames={1}>
         {/* jasne, ciepłe tło otoczenia: metal (np. szampański, szczotkowany) odbija wnętrze zamiast czerni */}
         <color attach="background" args={['#5f584e']} />
         <Lightformer form="rect" intensity={2.2} color="#fffaf2" position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[12, 12, 1]} />

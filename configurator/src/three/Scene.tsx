@@ -1,6 +1,7 @@
 // Scena 3D — ładowana leniwie (three w osobnym chunku).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 import { useIsMobile } from '../ui/useIsMobile';
 import { useConfig, useSolved, useView } from '../store/store';
 import { createMaterials, updateMaterials } from './materials';
@@ -13,6 +14,7 @@ import { Overlays } from './Overlays';
 import { LabelContext, LabelLayer, LabelUpdater } from './Labels';
 import { capture } from './capture';
 import { CommentPins } from './CommentPins';
+import { Effects, fxEnabled } from './Effects';
 import { useStudio } from '../studio/studioStore';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { DimView } from '../engine/dimensions';
@@ -51,7 +53,7 @@ export default function Scene() {
 
   return (
     <div className={`absolute inset-0 ${commentMode ? 'cursor-crosshair' : ''}`}>
-      <Canvas shadows="percentage" gl={{ antialias: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' }} dpr={[1, 2]} data-testid="stair-canvas">
+      <Canvas shadows="percentage" gl={{ antialias: true, preserveDrawingBuffer: false, powerPreference: 'high-performance', toneMapping: THREE.NeutralToneMapping }} dpr={[1, 2]} data-testid="stair-canvas">
         <LabelContext.Provider value={layer}>
           <CameraRig config={config} solved={solved} view={view} />
           <Lighting config={config} solved={solved} hq={!mobile} />
@@ -64,6 +66,7 @@ export default function Scene() {
           <Dimensions config={config} solved={solved} view={dimView} sideFlip={view.sideFlip} />
           <LabelUpdater />
           <Capture />
+          {fxEnabled && <Effects hq={!mobile} night={config.lighting.night} glow={config.lighting.led} />}
         </LabelContext.Provider>
       </Canvas>
       <div ref={labelRoot} className="pointer-events-none absolute inset-0 overflow-hidden" />

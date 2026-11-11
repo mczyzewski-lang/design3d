@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { FINISHES, GLASS_TINTS } from '../engine/catalog';
 import type { Config } from '../engine/types';
 import type { MatKey } from './geom/primitives';
-import { brushedRoughness, floorTexture, meshAlpha, perforatedAlpha, wallTexture, woodTextures } from './textures';
+import { brushedRoughness, floorTextures, meshAlpha, perforatedAlpha, wallTexture, woodTextures } from './textures';
 
 export interface Materials {
   stair: Record<MatKey, THREE.Material>;
@@ -12,12 +12,15 @@ export interface Materials {
   wall: THREE.MeshStandardMaterial;
   wallGhost: THREE.MeshStandardMaterial;
   slab: THREE.MeshStandardMaterial;
-  ground: THREE.MeshStandardMaterial;
+  ground: THREE.ShadowMaterial;
 }
 
 export function createMaterials(): Materials {
   const steel = new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.78, metalness: 0.15 });
   const railSteel = new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.78, metalness: 0.15 });
+  // ciemna stal odbija otoczenie mocniej niż reszta sceny — inaczej czarna konstrukcja zlewa się w plamę
+  steel.envMapIntensity = 2.2;
+  railSteel.envMapIntensity = 2.2;
   const w = woodTextures('oakNatural');
   const wood = new THREE.MeshStandardMaterial({ map: w.map, bumpMap: w.bump, bumpScale: 0.6, roughness: 0.58, metalness: 0 });
   const railWood = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.55, metalness: 0 });
@@ -31,20 +34,26 @@ export function createMaterials(): Materials {
   const mesh = new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.6, metalness: 0.3, alphaMap: meshAlpha(), alphaTest: 0.5, side: THREE.DoubleSide });
   mesh.alphaToCoverage = true;
   const wallTex = wallTexture();
+  const fl = floorTextures();
   return {
     stair: { steel, railSteel, wood, concrete, riser, railWood, led, glass, glassEdge, perforated, mesh },
-    floor: new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.6 }),
-    upperFloor: new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.6 }),
+    // lakier matowy: lekki połysk pod światło + wypukłość słojów i fug
+    floor: new THREE.MeshStandardMaterial({ map: fl.map, bumpMap: fl.bump, bumpScale: 0.9, roughness: 0.5 }),
+    upperFloor: new THREE.MeshStandardMaterial({ map: fl.map, bumpMap: fl.bump, bumpScale: 0.9, roughness: 0.5 }),
     wall: new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.92, color: '#ffffff' }),
     wallGhost: new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.92, transparent: true, opacity: 0.22, depthWrite: false }),
     slab: new THREE.MeshStandardMaterial({ color: '#f2efe9', roughness: 0.9 }),
-    ground: new THREE.MeshStandardMaterial({ color: '#e9e5de', roughness: 1 }),
+    // „łapacz cieni”: grunt poza pokojem jest przezroczysty i pokazuje tylko cień — bez widocznej linii horyzontu
+    ground: new THREE.ShadowMaterial({ color: '#3b3128', opacity: 0.22 }),
   };
 }
 
 function applySteel(m: THREE.MeshStandardMaterial, color: string, finish: string) {
   const f = FINISHES.find((x) => x.key === finish) ?? FINISHES[0];
   m.color.set(color);
+  // żadna farba nie jest idealnie czarna: albedo min. ~3,5% — dzięki temu czarna konstrukcja ma widoczną bryłę i cieniowanie
+  const lift = 0.045;
+  m.color.setRGB(Math.max(m.color.r, lift), Math.max(m.color.g, lift), Math.max(m.color.b, lift), THREE.LinearSRGBColorSpace);
   m.roughness = f.roughness;
   m.metalness = f.metalness;
   const wantMap = finish === 'brushed' ? brushedRoughness() : null;

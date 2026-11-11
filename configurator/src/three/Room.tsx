@@ -64,7 +64,8 @@ export function Room({ config, solved, view, mats }: Props) {
   return (
     <group>
       {/* grunt poza pokojem */}
-      <mesh rotation-x={-Math.PI / 2} position={[W / 2, -0.002, D / 2]} receiveShadow material={mats.ground}>
+      {/* łapacz cieni: tylko w dzień i w widokach perspektywicznych (w rzutach i nocą tło zostaje czyste) */}
+      <mesh rotation-x={-Math.PI / 2} position={[W / 2, -0.002, D / 2]} receiveShadow material={mats.ground} visible={!config.lighting.night && view.camera !== 'top' && view.camera !== 'side'}>
         <planeGeometry args={[W + 30, D + 30]} />
       </mesh>
       {/* posadzka z desek (także poza pokojem przy brakujących ścianach) */}

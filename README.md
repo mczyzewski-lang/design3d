@@ -29,6 +29,11 @@ npm start          # http://localhost:3000/  (PORT z env)
 - **LED przy szkle:** przy szklanej balustradzie oprawy punktowe i profil wzdłuż biegu są dostępne tylko, gdy każdy bieg ma obok ścianę (inaczej byłyby za szkłem) — wtedy zostaje taśma pod noskami.
 - **Telefon / iOS:** wszystkie pola tekstowe, listy i pola wielowierszowe mają na ekranach dotykowych czcionkę ≥ 16 px (reguła w `configurator/src/index.css` i `public/admin/styles.css`), więc Safari nie przybliża strony przy wpisywaniu. „Imię i nazwisko” to wszędzie jedno pole — serwer rozdziela je na imię i nazwisko.
 - **Fokus na telefonie:** pole z fokusem przewija się w widoczny obszar po wysunięciu klawiatury (w panelu — tuż pod przyklejoną scenę, w oknach — na środek); w „Zapisz i udostępnij” kursor trafia kolejno w imię i nazwisko, kod SMS, kod pocztowy.
+- **Jakość wizualizacji 3D** (`src/three/Effects.tsx`, `Lighting.tsx`, `materials.ts`, `textures.ts`):
+  - postprodukcja przez `postprocessing` + `n8ao`: cieniowanie kontaktowe (ambient occlusion), neutralne mapowanie tonów (Khronos PBR Neutral — drewno zachowuje kolor) i nocą poświata LED;
+  - AO wyłącza się samo, gdy render spada poniżej ~30 kl./s; w rzutach z góry i z boku jest wyłączone. Bez GPU (render programowy) albo po błędzie scena wraca do zwykłego renderu. `?fx=0` wyłącza efekty, `?fx=1` wymusza je (testy);
+  - światło: mocniejszy kontrast słońce / otoczenie, kontra wydobywająca ciemną stal, mapa cieni 4096 px na komputerze; grunt poza pokojem jest „łapaczem cieni” (bez linii horyzontu);
+  - materiały: nowa posadzka z desek (słoje i fugi z mapą wypukłości), czerń stali z minimalnym albedo, żeby konstrukcja miała widoczną bryłę.
 - **Logowanie numerem telefonu i kodem SMS** (`POST /api/studio/login/start`, `/login/verify`, `/logout`):
   - **Wykonawca:** wchodzi do panelu przez `/konfigurator/firma` (ekran logowania przy braku sesji) albo z bramki udostępnionego linku („Masz już konto?”). Wylogowanie jest w Profilu firmy.
   - **Klient:** pozycja „Moje projekty — zaloguj się numerem” w menu „Zapisz ▾” albo link `/konfigurator/?login=1` („Moje projekty” na landingu). Po zalogowaniu projekty przypisane do numeru są dostępne na tym urządzeniu.
