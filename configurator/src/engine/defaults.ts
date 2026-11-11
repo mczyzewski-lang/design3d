@@ -52,7 +52,7 @@ export const DEFAULT_CONFIG: Config = {
     handrail: 'round',
     handrailMaterial: 'steel',
     outer: 'balustrade',
-    inner: 'none',
+    inner: 'balustrade', // domyślnie obie strony; odcinki przy ścianie są pomijane automatycznie
     landing: true,
     opening: true,
     glassThickness: 0.0176,

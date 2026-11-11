@@ -25,6 +25,7 @@ export const LIMITS = {
   openingMargin: 0.05,
   slabExtension: 1.4, // strop poza pokojem przy brakującej ścianie
   wallAdjacent: 0.15,
+  wallFlush: 0.11, // stopnie bliżej ściany niż 11 cm: balustrada od tej strony jest pomijana (wraz z miejscem na nią)
   // schody kręcone (odniesienie ergonomiczne na linii chodu)
   spiralMinDiameter: 1.2,
   spiralMaxDiameter: 2.6,

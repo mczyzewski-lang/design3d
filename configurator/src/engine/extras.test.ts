@@ -93,7 +93,7 @@ describe('stopnie zabiegowe', () => {
   for (const shape of ['L', 'U'] as const) for (const turn of ['left', 'right'] as const) {
     test(`${shape} ${turn}: wysokości ciągłe, wielokąty wypełniają zakręt, ostatni stopień na stropie`, () => {
       const k = shape === 'L' ? 3 : 6;
-      const c = cfg((x) => { x.stairs.shape = shape; x.stairs.turn = turn; x.stairs.turnType = 'winders'; x.stairs.winders = k; x.room.width = 4.5; x.room.depth = 5; });
+      const c = cfg((x) => { x.stairs.shape = shape; x.stairs.turn = turn; x.stairs.turnType = 'winders'; x.stairs.winders = k; x.room.width = 4.5; x.room.depth = 5; x.stairs.wallGap = 0.2; });
       const s = solve(c);
       const W = s.layout.winder!;
       expect(W.treads.length).toBe(k);
@@ -137,7 +137,7 @@ describe('szkło i link', () => {
     expect(code.length).toBeLessThan(200);
     expect(decodeConfig(code)).toEqual(c);
     expect(configFromHash(shareUrl(c, 'https://design3d.pl/konfigurator/').split('/konfigurator/')[1])).toEqual(c);
-    expect(encodeConfig(DEFAULT_CONFIG)).toBe('e30');
+    expect(encodeConfig(DEFAULT_CONFIG)).toBe('eyJ2IjoyfQ');
     expect(decodeConfig('!!!')).toBeNull();
   });
 });

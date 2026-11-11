@@ -93,8 +93,29 @@ export function buildRailPaths(room: RoomConfig, layout: Layout, opening: Openin
       : brk ? [e.points.slice(0, brk), e.points.slice(brk)].filter((q) => q.length >= 2) : [e.points];
     parts.forEach((pts, pi) => {
       if (mode === 'balustrade') {
-        const off = offsetPolyline(pts, e.interior, pts.slice(1).map(() => LIMITS.railOffset));
-        paths.push({ id: `${side}-${pi}`, kind: 'balustrade', scope: 'stair', side, points: off.map((p) => W3(layout, p)) });
+        // balustrada tylko wzdłuż otwartych krawędzi: odcinki biegnące przy istniejącej ścianie są pomijane
+        const raw: Array<boolean | null> = pts.slice(1).map((b, i) => {
+          const a = pts[i];
+          if (Math.hypot(b.u - a.u, b.v - a.v) < 0.05) return null; // krótki łącznik — jak sąsiedni odcinek
+          const nW = segmentOutwardWorld(layout, a, b, e.interior);
+          if (!nW) return null;
+          const hit = wallInDirection(room, toWorld(layout.xf, (a.u + b.u) / 2, (a.v + b.v) / 2), nW);
+          return hit.present && hit.dist <= LIMITS.wallFlush + 1e-6;
+        });
+        const atWall = raw.map((v, i) => v ?? raw.slice(0, i).reverse().find((x) => x !== null) ?? raw.slice(i + 1).find((x) => x !== null) ?? false);
+        let start = 0;
+        let ri = 0;
+        for (let i = 0; i <= atWall.length; i++) {
+          if (i < atWall.length && !atWall[i]) continue;
+          const run = pts.slice(start, i + 1);
+          const planLen = run.slice(1).reduce((a, q, j) => a + Math.hypot(q.u - run[j].u, q.v - run[j].v), 0);
+          if (i > start && planLen >= 0.3) {
+            const off = offsetPolyline(run, e.interior, run.slice(1).map(() => LIMITS.railOffset));
+            paths.push({ id: `${side}-${pi}${ri ? `-${ri}` : ''}`, kind: 'balustrade', scope: 'stair', side, points: off.map((p) => W3(layout, p)) });
+            ri++;
+          }
+          start = i + 1;
+        }
         return;
       }
       // pochwyt przyścienny: oś rury 6,5 cm od lica najbliższej ściany

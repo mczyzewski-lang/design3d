@@ -286,29 +286,52 @@ export function wallGaps(s: Pick<StairConfig, 'wallGap' | 'wallGapSplit' | 'wall
   return s.wallGapSplit ? { left: s.wallGapLeft ?? g, right: s.wallGapRight ?? g, back: g, front: g } : { left: g, right: g, back: g, front: g };
 }
 
-/** Rozmieszczenie: wyrównanie rzutu całkowitego wg ustawień i odstępu od ścian. */
+/**
+ * Rozmieszczenie: wyrównanie rzutu całkowitego wg ustawień i odstępu od ścian.
+ * Margines na balustradę jest pomijany po stronie, gdzie schody przylegają do istniejącej ściany
+ * (tam balustrady nie ma) — dzięki temu „odstęp 0” oznacza stopnie przy samej ścianie.
+ */
 export function placeLocal(room: RoomConfig, s: StairConfig, local: LocalStair): Xf {
   const { f, r } = ENTRY_VECTORS[s.entry];
   const base: Xf = { ox: 0, oz: 0, rx: r.x, rz: r.z, fx: f.x, fz: f.z };
-  const fp = rectToWorld(base, local.uMin - local.margin.uMin, local.uMax + local.margin.uMax, local.vMin, local.vMax + local.margin.vMax);
-  const wFp = fp.maxX - fp.minX;
-  const dFp = fp.maxZ - fp.minZ;
   const g = wallGaps(s);
-  let minX: number;
-  switch (s.alignX) {
-    case 'left': minX = g.left; break;
-    case 'right': minX = room.width - g.right - wFp; break;
-    case 'manual': minX = s.manualX; break;
-    default: minX = g.left + (room.width - g.left - g.right - wFp) / 2;
+  const place = (m: LocalStair['margin']): Xf => {
+    const fp = rectToWorld(base, local.uMin - m.uMin, local.uMax + m.uMax, local.vMin, local.vMax + m.vMax);
+    const wFp = fp.maxX - fp.minX;
+    const dFp = fp.maxZ - fp.minZ;
+    let minX: number;
+    switch (s.alignX) {
+      case 'left': minX = g.left; break;
+      case 'right': minX = room.width - g.right - wFp; break;
+      case 'manual': minX = s.manualX; break;
+      default: minX = g.left + (room.width - g.left - g.right - wFp) / 2;
+    }
+    let minZ: number;
+    switch (s.alignZ) {
+      case 'back': minZ = g.back; break;
+      case 'front': minZ = room.depth - g.front - dFp; break;
+      case 'manual': minZ = s.manualZ; break;
+      default: minZ = (room.depth - dFp) / 2;
+    }
+    return { ...base, ox: minX - fp.minX, oz: minZ - fp.minZ };
+  };
+  // położenie samej bryły (bez marginesów) → które strony wypadają przy ścianie
+  const xf0 = place({ uMin: 0, uMax: 0, vMax: 0 });
+  const uMid = (local.uMin + local.uMax) / 2;
+  const vMid = (local.vMin + local.vMax) / 2;
+  const sides: Array<[keyof LocalStair['margin'], number, number, number, number]> = [
+    ['uMin', local.uMin, vMid, -1, 0], ['uMax', local.uMax, vMid, 1, 0], ['vMax', uMid, local.vMax, 0, 1],
+  ];
+  for (const [key, u, v, du, dv] of sides) {
+    if (!local.margin[key]) continue;
+    const p = toWorld(xf0, u, v);
+    const n = dirToWorld(xf0, du, dv);
+    const [present, dist] = Math.abs(n.x) > Math.abs(n.z)
+      ? (n.x > 0 ? [room.walls.right, room.width - p.x] : [room.walls.left, p.x])
+      : (n.z > 0 ? [room.walls.front, room.depth - p.z] : [room.walls.back, p.z]);
+    if (present && dist <= LIMITS.wallFlush + 1e-6) local.margin[key] = 0;
   }
-  let minZ: number;
-  switch (s.alignZ) {
-    case 'back': minZ = g.back; break;
-    case 'front': minZ = room.depth - g.front - dFp; break;
-    case 'manual': minZ = s.manualZ; break;
-    default: minZ = (room.depth - dFp) / 2;
-  }
-  return { ...base, ox: minX - fp.minX, oz: minZ - fp.minZ };
+  return place(local.margin);
 }
 
 export function buildLayout(room: RoomConfig, s: StairConfig, calc: Calc, rails: { outer: boolean; inner: boolean; landing: boolean }): Layout {

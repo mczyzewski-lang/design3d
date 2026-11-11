@@ -152,8 +152,8 @@ describe('walidacja ergonomii i balustrad', () => {
     expect(ids((c) => { c.railing.type = 'horizontalBars'; })).toContain('rail-climb');
     expect(ids((c) => { c.railing.type = 'glass'; c.railing.glassThickness = 0.012; })).toContain('rail-glass');
     expect(ids((c) => { c.railing.outer = 'none'; })).toContain('open-outer');
-    expect(ids((c) => { c.railing.outer = 'none'; })).toContain('no-handrail');
-    expect(ids((c) => { c.stairs.gap = 0.3; c.room.width = 2.8; })).toContain('open-inner');
+    expect(ids((c) => { c.railing.outer = 'none'; c.railing.inner = 'none'; })).toContain('no-handrail');
+    expect(ids((c) => { c.stairs.gap = 0.3; c.room.width = 2.8; c.railing.inner = 'none'; })).toContain('open-inner');
     expect(ids(() => {})).not.toContain('open-inner'); // wąska szczelina U ≤ 12 cm
     expect(ids((c) => { c.stairs.shape = 'I'; c.room.depth = 6.5; c.room.width = 3.5; c.railing.inner = 'wallHandrail'; })).toContain('wall-inner');
   });
@@ -161,7 +161,8 @@ describe('walidacja ergonomii i balustrad', () => {
 
 describe('ścieżki balustrad', () => {
   test('E: ścieżka zewnętrzna U jest ciągła: bieg → spocznik → bieg, pozioma na spoczniku', () => {
-    const s = solve(DEFAULT_CONFIG);
+    // spocznik odsunięty od tylnej ściany (przy samej ścianie balustrada spocznika jest pomijana)
+    const s = solve(cfg((c) => { c.stairs.wallGap = 0.2; }));
     const outer = s.rails.filter((r) => r.side === 'outer');
     expect(outer.length).toBe(1);
     const p = outer[0].points;
@@ -171,6 +172,15 @@ describe('ścieżki balustrad', () => {
     near(p[p.length - 1].y, DEFAULT_CONFIG.room.height);
     // odsunięcie 3,5 cm na zewnątrz krawędzi
     expect(pathPlanLength(p)).toBeGreaterThan(2 * 2.52 + 2.0);
+  });
+  test('przy ścianie balustrada jest pomijana, a „odstęp 0” dosuwa stopnie do ściany', () => {
+    // domyślnie spocznik stoi 8 cm od tylnej ściany → balustrada tylko wzdłuż biegów
+    expect(solve(DEFAULT_CONFIG).rails.filter((r) => r.side === 'outer').length).toBe(2);
+    const s = solve(cfg((c) => { c.stairs.wallGap = 0; c.stairs.wallGapLeft = 0; c.stairs.wallGapRight = 0; c.stairs.alignX = 'left'; }));
+    near(s.layout.structureRect.minX, 0);
+    near(s.layout.structureRect.minZ, 0);
+    // lewy bieg i spocznik przy ścianach — zostaje balustrada tylko przy biegu od strony pokoju
+    expect(s.rails.filter((r) => r.side === 'outer' && r.kind === 'balustrade').length).toBe(1);
   });
   test('bez balustrady spocznika ścieżka dzieli się na dwie', () => {
     const s = solve(cfg((c) => { c.railing.landing = false; }));

@@ -337,6 +337,23 @@ function RoomSection() {
       </Field>
       {s.alignZ === 'manual' && <SliderField label="Odległość od tylnej ściany" value={s.manualZ} onChange={(v) => setStairs({ manualZ: v })} min={-100} max={c.room.depth * 100} />}
       <SliderField testId="f-wallgap" label={s.wallGapSplit ? 'Odstęp od ściany tylnej / przedniej' : 'Odstęp od ścian'} value={s.wallGap} onChange={(v) => setStairs(s.wallGapSplit ? { wallGap: v } : { wallGap: v, wallGapLeft: v, wallGapRight: v })} min={0} max={60} />
+      {(() => {
+        // faktyczna odległość stopni od ścian — może być większa niż ustawiony odstęp (wyśrodkowanie, miejsce na balustradę)
+        const r = solved.layout.structureRect;
+        const cmv = (v: number) => Math.max(0, Math.round(v * 200) / 2); // co 0,5 cm
+        const real: Array<[string, number, number]> = [];
+        if (c.room.walls.left) real.push(['lewa', cmv(r.minX), cmv(s.wallGapSplit ? s.wallGapLeft : s.wallGap)]);
+        if (c.room.walls.right) real.push(['prawa', cmv(c.room.width - r.maxX), cmv(s.wallGapSplit ? s.wallGapRight : s.wallGap)]);
+        if (c.room.walls.back) real.push(['tylna', cmv(r.minZ), cmv(s.wallGap)]);
+        if (!real.some(([, v, set]) => v > set && v <= 40)) return null;
+        const centered = s.alignX === 'center' && real.some(([n, v, set]) => (n === 'lewa' || n === 'prawa') && v > set + 5);
+        return (
+          <p className="-mt-1 mb-2 text-[11.5px] leading-snug text-muted" data-testid="wallgap-real">
+            Stopnie od ścian: {real.map(([n, v]) => `${n} ${String(v).replace('.', ',')} cm`).join(' · ')}.{' '}
+            {centered ? 'Schody są węższe niż pomieszczenie i wyśrodkowane — wybierz „Lewo” lub „Prawo”, aby dosunąć je do ściany, albo poszerz bieg.' : 'Różnica to miejsce na balustradę od strony ściany (5 cm). Gdy stopnie są bliżej ściany niż 11 cm, balustrada od tej strony jest pomijana.'}
+          </p>
+        );
+      })()}
       <Toggle label="Osobny odstęp z lewej i z prawej" checked={s.wallGapSplit} onChange={(v) => setStairs(v ? { wallGapSplit: true, wallGapLeft: s.wallGap, wallGapRight: s.wallGap } : { wallGapSplit: false })} />
       {s.wallGapSplit && (
         <>

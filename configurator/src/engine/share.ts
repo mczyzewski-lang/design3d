@@ -26,12 +26,17 @@ const fromB64Url = (s: string) => {
 };
 
 export function encodeConfig(c: Config): string {
-  return toB64Url(JSON.stringify(diff(c, DEFAULT_CONFIG) ?? {}));
+  // v: 2 — od tej wersji domyślna jest balustrada także po stronie wewnętrznej
+  return toB64Url(JSON.stringify({ ...(diff(c, DEFAULT_CONFIG) ?? {}), v: 2 }));
 }
 
 export function decodeConfig(code: string): Config | null {
   try {
-    return mergeWithDefaults(JSON.parse(fromB64Url(code)));
+    const raw = JSON.parse(fromB64Url(code));
+    // starsze linki (bez „v”) powstały, gdy domyślnie nie było balustrady wewnętrznej — zachowaj ich wygląd
+    if (raw && typeof raw === 'object' && !raw.v && raw.railing?.inner === undefined) raw.railing = { ...(raw.railing ?? {}), inner: 'none' };
+    if (raw && typeof raw === 'object') delete raw.v;
+    return mergeWithDefaults(raw);
   } catch {
     return null;
   }
